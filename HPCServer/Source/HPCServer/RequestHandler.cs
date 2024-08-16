@@ -25,13 +25,6 @@ namespace HPCServer
             String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configuration);
             Console.WriteLine("Searching for configuration file: "+configurationFilePath);
 
-            //List<HPCEngine> engines = new();
-            //engines.Add(new HPCEngine("Blender", "\"C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe\""));
-
-            //Core.Configuration.HPCServer hpcServer = new(engines.ToArray(), "5000");
-            //JsonManager.SerializeToFile(hpcServer, configurationFilePath);
-            //return;
-
             _hpcServerArgs = JsonManager.DeserializeFromFile<Core.Configuration.HPCServer>(configurationFilePath);
 
             if (_hpcServerArgs == null)
