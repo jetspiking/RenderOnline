@@ -4,7 +4,7 @@ Solution for Managing and Executing Rendering Tasks on HPC Infrastructure
 ## HPCServer
 - Server running on powerful hardware to allow rendering incoming tasks
 
-Todo:
+# Todo:
 
 ## RenderOnline
 - Website containing information about the service and pricing for service
