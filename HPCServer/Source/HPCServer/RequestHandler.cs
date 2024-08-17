@@ -13,26 +13,30 @@ namespace HPCServer
 {
     public class RequestHandler
     {
-        private Core.Configuration.HPCServer? _hpcServerArgs;
+        private Core.Configuration.HPCServer _hpcServerArgs;
+        
         private Process? _renderProcess = null;
-
-        private UInt64? _taskId { get; set; } = null;
+        private UInt64 _taskId { get; set; } = 0;
         private Boolean _isLastSuccessfull { get; set; } = true;
+        private DateTime? _taskExitTime = null;
 
-        public RequestHandler(WebApplication? app)
+        public RequestHandler(WebApplication app)
         {
-            const String configuration = "Configuration.json";
-            String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configuration);
+            const String configurationFileName = "Configuration.json";
+            String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configurationFileName);
+
             Console.WriteLine("Searching for configuration file: "+configurationFilePath);
 
-            _hpcServerArgs = JsonManager.DeserializeFromFile<Core.Configuration.HPCServer>(configurationFilePath);
+            Core.Configuration.HPCServer? configuration = JsonManager.DeserializeFromFile<Core.Configuration.HPCServer>(configurationFilePath);
 
-            if (_hpcServerArgs == null)
+            if (configuration == null)
             {
-                Console.WriteLine($"{configuration} not found!");
+                Console.WriteLine($"{configurationFileName} not found!");
                 Console.ReadKey();
-                return;
+                Environment.Exit(0);
             }
+
+            this._hpcServerArgs = configuration;
 
             app.Urls.Add("http://localhost:"+ _hpcServerArgs.Port);
             app.UseHttpsRedirection();
@@ -52,7 +56,25 @@ namespace HPCServer
 
         public async Task HandleStatusRequest(HttpContext httpContext)
         {
-            HPCStatusRequestResponse statusResponse = new(this._renderProcess == null, this._taskId, this._isLastSuccessfull);
+            HPCTask? renderTask;
+            if (_renderProcess == null)
+            {
+                renderTask = null;
+            }
+            else
+            {
+                // Use exit time or current time, depending on whether the process is still busy.
+                DateTime taskTime = this._taskExitTime ?? DateTime.Now;
+                renderTask = new(this._taskId, this._isLastSuccessfull, this._taskExitTime == null, (UInt64)(taskTime - this._renderProcess.StartTime).TotalSeconds);
+            }
+
+            List<String> engineIds = new();
+
+            if (_hpcServerArgs.RenderingEngines != null)
+                foreach (HPCEngine engine in _hpcServerArgs.RenderingEngines)
+                    engineIds.Add(engine.EngineId);
+
+            HPCStatusRequestResponse statusResponse = new(engineIds.ToArray(), renderTask);
 
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
             await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(statusResponse));
@@ -62,10 +84,10 @@ namespace HPCServer
         {
             if (_hpcServerArgs == null) return;
 
-            // There is another render in progress.
-            if (this._renderProcess != null)
+            if (this._taskExitTime == null && this._renderProcess != null)
             {
-                await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorRenderInProgress, true);
+                // There is another render in progress.
+                await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorRenderInProgress, false);
                 return;
             }
 
@@ -75,7 +97,7 @@ namespace HPCServer
             if (arguments == null)
             {
                 // Request does not contain expected arguments object.
-                await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorInvalidRenderArgs, true);
+                await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorInvalidRenderArgs, false);
                 return;
             }
 
@@ -89,17 +111,18 @@ namespace HPCServer
             if (toRender != null)
                 AssignWhenRenderFinished(toRender);
             else
-                await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, hpcRender.ErrorMessage, true);
+                await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, hpcRender.ErrorMessage, false);
 
-            await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, hpcRender.SuccessMessage, false);
+            await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, hpcRender.SuccessMessage, true);
         }
 
         public async Task HandleStopRenderRequest(HttpContext httpContext)
         {
-            if (this._renderProcess == null)
+            if (this._taskExitTime != null || this._renderProcess == null)
             {
                 // There is no active render.
-                await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, AppStrings.SuccessNoActiveRender, false);
+                await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, AppStrings.SuccessNoActiveRender, true);
+                return;
             }
             else
                 try
@@ -108,14 +131,14 @@ namespace HPCServer
                     if (arguments == null)
                     {
                         // Request does not contain expected arguments object.
-                        await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorInvalidRenderArgs, true);
+                        await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorInvalidRenderArgs, false);
                         return;
                     }
 
                     if (this._taskId != arguments.TaskId)
                     {
                         // Task identifier does not match.
-                        await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorInvalidTaskId, true);
+                        await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorInvalidTaskId, false);
                         return;
                     }
 
@@ -127,31 +150,38 @@ namespace HPCServer
                     // An error occured.
                     UserWriter.Log(e.Message);
 
-                    await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorStoppingRender, true);
+                    await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, AppStrings.ErrorStoppingRender, false);
+                    return;
                 }
 
             // Render was stopped successfully.
-            await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, AppStrings.SuccessStoppingRender, false);
+            await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, AppStrings.SuccessStoppingRender, true);
         }
 
         public async void AssignWhenRenderFinished(Process process)
         {
+            // Remove potential previously allocated task completion time.
+            this._taskExitTime = null;
+
             // Assign rendering process.
             this._renderProcess = process;
 
             // Wait until render is completed.
             await process.WaitForExitAsync();
 
+            // Assign task completion time.
+            this._taskExitTime = DateTime.Now;
+
             // If exit code is 0, the process was completed successfully.
             this._isLastSuccessfull = process.ExitCode == 0;
 
             // Render complete, reset process.
-            this._renderProcess = null;
+            // this._renderProcess = null;
         }
 
-        private async Task CreateRenderResponseObject(HttpContext httpContext, Int32 statusCode, String message, Boolean isError)
+        private async Task CreateRenderResponseObject(HttpContext httpContext, Int32 statusCode, String message, Boolean isSuccess)
         {
-            HPCRenderRequestResponse response = new(isError, message);
+            HPCRenderRequestResponse response = new(isSuccess, message);
 
             httpContext.Response.StatusCode = statusCode;
             await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(response));
