@@ -26,19 +26,13 @@ DROP TABLE IF EXISTS `engines`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `engines` (
   `engine_id` tinyint unsigned NOT NULL AUTO_INCREMENT,
-  `engine_name` varchar(50) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `extension` varchar(50) NOT NULL,
+  `download_path` text NOT NULL,
+  `render_argument` text NOT NULL,
   PRIMARY KEY (`engine_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `engines`
---
-
-LOCK TABLES `engines` WRITE;
-/*!40000 ALTER TABLE `engines` DISABLE KEYS */;
-/*!40000 ALTER TABLE `engines` ENABLE KEYS */;
-UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -49,4 +43,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-24 13:34:15
+-- Dump completed on 2024-08-24 19:49:00
