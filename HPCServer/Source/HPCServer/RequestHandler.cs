@@ -38,7 +38,7 @@ namespace HPCServer
 
             this._hpcServerArgs = configuration;
 
-            app.Urls.Add("http://localhost:"+ _hpcServerArgs.Port);
+            app.Urls.Add("https://localhost:"+ _hpcServerArgs.Port);
             app.UseHttpsRedirection();
             app.UseAuthorization();
 
