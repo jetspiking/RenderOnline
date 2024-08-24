@@ -26,13 +26,14 @@ DROP TABLE IF EXISTS `tasks`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `tasks` (
   `task_id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `user_id` bigint unsigned NOT NULL,
+  `user_id` smallint unsigned NOT NULL,
   `queue_time` datetime DEFAULT NULL,
   `start_time` datetime DEFAULT NULL,
   `end_time` datetime DEFAULT NULL,
   `is_running` tinyint NOT NULL,
   `is_success` tinyint NOT NULL,
   `render_id` bigint unsigned NOT NULL,
+  `machine_id` tinyint unsigned DEFAULT NULL,
   PRIMARY KEY (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -55,4 +56,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-22  0:01:48
+-- Dump completed on 2024-08-24 13:34:15

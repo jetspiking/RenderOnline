@@ -26,7 +26,7 @@ DROP TABLE IF EXISTS `subscriptions`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `subscriptions` (
   `subscription_id` tinyint unsigned NOT NULL AUTO_INCREMENT,
-  `price` decimal(10,2) NOT NULL,
+  `subscription_name` varchar(50) NOT NULL,
   PRIMARY KEY (`subscription_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -49,4 +49,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-22  0:01:47
+-- Dump completed on 2024-08-24 13:34:14
