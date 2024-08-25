@@ -16,17 +16,17 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Table structure for table `queue`
+-- Table structure for table `argtypes`
 --
 
-DROP TABLE IF EXISTS `queue`;
+DROP TABLE IF EXISTS `argtypes`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `queue` (
-  `queue_id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `task_id` bigint unsigned NOT NULL,
-  PRIMARY KEY (`queue_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE `argtypes` (
+  `argtype_id` varchar(50) NOT NULL,
+  `type` varchar(20) NOT NULL,
+  PRIMARY KEY (`argtype_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

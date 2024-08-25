@@ -1,5 +1,3 @@
-CREATE DATABASE  IF NOT EXISTS `renderonline` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-USE `renderonline`;
 -- MySQL dump 10.13  Distrib 8.0.38, for Win64 (x86_64)
 --
 -- Host: localhost    Database: renderonline
@@ -43,4 +41,4 @@ CREATE TABLE `engines` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-24 19:49:00
+-- Dump completed on 2024-08-25 23:47:55
