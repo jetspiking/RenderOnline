@@ -1,3 +1,5 @@
+CREATE DATABASE  IF NOT EXISTS `renderonline` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `renderonline`;
 -- MySQL dump 10.13  Distrib 8.0.38, for Win64 (x86_64)
 --
 -- Host: localhost    Database: renderonline
@@ -24,7 +26,8 @@ DROP TABLE IF EXISTS `subscriptions`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `subscriptions` (
   `subscription_id` tinyint unsigned NOT NULL AUTO_INCREMENT,
-  `subscription_name` varchar(50) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `queue_limit` tinyint unsigned NOT NULL,
   PRIMARY KEY (`subscription_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -38,4 +41,4 @@ CREATE TABLE `subscriptions` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-25 23:47:54
+-- Dump completed on 2024-08-27 13:37:13

@@ -1,3 +1,5 @@
+CREATE DATABASE  IF NOT EXISTS `renderonline` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `renderonline`;
 -- MySQL dump 10.13  Distrib 8.0.38, for Win64 (x86_64)
 --
 -- Host: localhost    Database: renderonline
@@ -26,7 +28,7 @@ CREATE TABLE `queue` (
   `queue_id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `task_id` bigint unsigned NOT NULL,
   PRIMARY KEY (`queue_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -38,4 +40,4 @@ CREATE TABLE `queue` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-25 23:47:54
+-- Dump completed on 2024-08-27 13:37:13

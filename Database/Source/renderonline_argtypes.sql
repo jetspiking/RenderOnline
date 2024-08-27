@@ -1,3 +1,5 @@
+CREATE DATABASE  IF NOT EXISTS `renderonline` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `renderonline`;
 -- MySQL dump 10.13  Distrib 8.0.38, for Win64 (x86_64)
 --
 -- Host: localhost    Database: renderonline
@@ -25,6 +27,7 @@ DROP TABLE IF EXISTS `argtypes`;
 CREATE TABLE `argtypes` (
   `argtype_id` varchar(50) NOT NULL,
   `type` varchar(20) NOT NULL,
+  `regex` text,
   PRIMARY KEY (`argtype_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -38,4 +41,4 @@ CREATE TABLE `argtypes` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-08-25 23:47:54
+-- Dump completed on 2024-08-27 13:37:13

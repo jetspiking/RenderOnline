@@ -76,6 +76,9 @@ namespace RenderAPI
             // Remove a rendering assignment.
             app.MapPost("/renderapi/v1/dequeue", HandleDequeueRequest);
 
+            // Download a rendering result.
+            app.MapPost("/renderapi/v1/download", HandleDownloadRequest);
+
             // Start the polling service to monitor render tasks.
             StartPollingService();
 
@@ -257,14 +260,14 @@ namespace RenderAPI
             if (user == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await httpContext.Response.WriteAsync(String.Empty);
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, "Unauthorized.")));
                 return;
             }
 
             if (!httpContext.Request.HasFormContentType || !httpContext.Request.Form.Files.Any())
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync("No files were uploaded.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, "No files were uploaded.")));
                 return;
             }
 
@@ -274,7 +277,7 @@ namespace RenderAPI
             if (jsonRequestString == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync("Header \"request\" is empty.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, "Header \"request\" is empty.")));
                 return;
             }
 
@@ -282,7 +285,7 @@ namespace RenderAPI
             if (enqueueRequest == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync("Invalid enqueue request arguments.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, "Invalid enqueue request arguments.")));
                 return;
             }
 
@@ -291,11 +294,56 @@ namespace RenderAPI
             if (uploadedFiles.Count > 1)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync("Only 1 file may be uploaded per request.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, "Only 1 file may be uploaded per request.")));
                 return;
             }
 
             IFormFile uploadedFile = uploadedFiles[0];
+
+
+            // Retrieve the subscription queue limit
+            String retrieveSubscriptionQuery = @"
+                        SELECT 
+                            s.queue_limit
+                        FROM 
+                            subscriptions s
+                        WHERE 
+                            s.subscription_id = @SubscriptionId";
+
+            MySqlCommand retrieveSubscriptionCommand = new MySqlCommand(retrieveSubscriptionQuery, this._databaseMySqlConnection);
+            retrieveSubscriptionCommand.Parameters.AddWithValue("@SubscriptionId", user.SubscriptionId);
+
+            Byte queueLimit = 0;
+            MySqlDataReader reader = retrieveSubscriptionCommand.ExecuteReader();
+            if (reader.Read())
+            {
+                queueLimit = reader.GetByte("queue_limit");
+            }
+            reader.Close();
+
+            // Check the current number of queued tasks for the user
+            String countQueuedTasksQuery = @"
+                        SELECT 
+                            COUNT(*) 
+                        FROM 
+                            tasks t
+                        JOIN 
+                            queue q ON t.task_id = q.task_id
+                        WHERE 
+                            t.user_id = @UserId";
+
+            MySqlCommand countQueuedTasksCommand = new MySqlCommand(countQueuedTasksQuery, this._databaseMySqlConnection);
+            countQueuedTasksCommand.Parameters.AddWithValue("@UserId", user.UserId);
+
+            UInt64 currentQueuedTasks = Convert.ToUInt64(countQueuedTasksCommand.ExecuteScalar());
+
+            // Compare against the queue limit
+            if (currentQueuedTasks >= queueLimit)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Queue limit {queueLimit} reached for your subscription.")));
+                return;
+            }
 
             String retrieveEngineQuery = @"
                         SELECT 
@@ -312,7 +360,7 @@ namespace RenderAPI
             MySqlCommand retrieveEngineCommand = new MySqlCommand(retrieveEngineQuery, this._databaseMySqlConnection);
             retrieveEngineCommand.Parameters.AddWithValue("@EngineId", enqueueRequest.EngineId);
 
-            MySqlDataReader reader = retrieveEngineCommand.ExecuteReader();
+            reader = retrieveEngineCommand.ExecuteReader();
 
             ApiEngine? engine = null;
 
@@ -332,14 +380,14 @@ namespace RenderAPI
             if (engine == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync($"Engine with identifier {enqueueRequest.EngineId} not found!");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Engine with identifier {enqueueRequest.EngineId} not found.")));
                 return;
             }
 
             if (engine.Extension != Path.GetExtension(uploadedFile.FileName))
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync($"Engine extension {engine.Extension} not matching with files extension {Path.GetExtension(uploadedFile.FileName)}");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Engine extension {engine.Extension} not matching with files extension {Path.GetExtension(uploadedFile.FileName)}.")));
                 return;
             }
             DateTime queueTime = DateTime.Now;
@@ -358,7 +406,8 @@ namespace RenderAPI
                 String retrieveArgType = @"
                         SELECT 
                             a.argtype_id,
-                            a.type
+                            a.type,
+                            a.regex
                         FROM 
                             argtypes a
                         WHERE 
@@ -375,8 +424,9 @@ namespace RenderAPI
                 {
                     String argTypeId = reader.GetString("argtype_id");
                     String type = reader.GetString("type");
+                    String? regex = reader.GetString("regex");
 
-                    argType = new DbArgType(argTypeId, type);
+                    argType = new DbArgType(argTypeId, type, regex);
                 }
 
                 reader.Close();
@@ -384,58 +434,60 @@ namespace RenderAPI
                 if (argType == null)
                 {
                     httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync($"Argument type identifier {argumentType.ArgTypeId} must be present in database!");
+                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Argument type identifier {argumentType.ArgTypeId} must be present in database.")));
                     return;
                 }
 
                 Boolean isValueAllowed = false;
 
-                switch (argType.Type)
-                {
-                    default:
-                        {
-                            httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                            await httpContext.Response.WriteAsync($"Type {argType.Type} is not valid for RenderOnline!");
-                            return;
-                        }
-                    case "file":
-                        // Allow only safe filenames (alphanumeric, underscore, hyphen, dot)
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9_\-]+\.[a-zA-Z0-9]{1,4}$");
-                        break;
-                    case "path":
-                        // Only allow absolute paths without any special shell characters
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^(/[a-zA-Z0-9_\-]+)+/?$");
-                        break;
-                    case "extension":
-                        // File extensions: 1 to 4 alphabetic characters
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\.[a-zA-Z0-9]{1,4}$");
-                        break;
-                    case "word":
-                        // Single alphanumeric word
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\w+$");
-                        break;
-                    case "sentence":
-                        // Allow sentences but restrict special characters; avoid injection-prone ones
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9\s,.!?'-]+$");
-                        break;
-                    case "natural":
-                        // Positive integers only
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\d+$");
-                        break;
-                    case "integers":
-                        // Allow negative and positive integers
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+$");
-                        break;
-                    case "real":
-                        // Allow positive/negative floats and integers
-                        isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+(\.\d+)?$");
-                        break;
-                }
+                if (String.IsNullOrEmpty(argType.Regex))
+                    switch (argType.Type)
+                    {
+                        default:
+                            {
+                                httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Type {argType.Type} is not valid for RenderOnline.")));
+                                return;
+                            }
+                        case "file":
+                            // Allow only safe filenames (alphanumeric, underscore, hyphen, dot)
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9_\-]+\.[a-zA-Z0-9]{1,4}$");
+                            break;
+                        case "path":
+                            // Only allow absolute paths without any special shell characters
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^(/[a-zA-Z0-9_\-]+)+/?$");
+                            break;
+                        case "extension":
+                            // File extensions: 1 to 4 alphabetic characters
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\.[a-zA-Z0-9]{1,4}$");
+                            break;
+                        case "word":
+                            // Single alphanumeric word
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\w+$");
+                            break;
+                        case "sentence":
+                            // Allow sentences but restrict special characters; avoid injection-prone ones
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9\s,.!?'-]+$");
+                            break;
+                        case "natural":
+                            // Positive integers only
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\d+$");
+                            break;
+                        case "integers":
+                            // Allow negative and positive integers
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+$");
+                            break;
+                        case "real":
+                            // Allow positive/negative floats and integers
+                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+(\.\d+)?$");
+                            break;
+                    }
+                else if (argType.Regex != null) isValueAllowed = Regex.IsMatch(argumentType.Value, argumentType.Regex);
 
                 if (!isValueAllowed)
                 {
                     httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync($"Value {argumentType.Value} must be of type {argType.Type}!");
+                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Value {argumentType.Value} must be of type {argType.Type}.")));
                     return;
                 }
 
@@ -484,7 +536,7 @@ namespace RenderAPI
             addQueueCommand.ExecuteNonQuery();
 
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await httpContext.Response.WriteAsync("Task successfully enqueued.");
+            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(true, "Task successfully enqueued.")));
         }
 
         public async Task HandleDequeueRequest(HttpContext httpContext)
@@ -501,7 +553,7 @@ namespace RenderAPI
             if (!httpContext.Request.HasJsonContentType())
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync("Request content type must be application/json.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, "Request content type must be application/json.")));
                 return;
             }
 
@@ -510,7 +562,7 @@ namespace RenderAPI
             if (dequeueRequest == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync("Invalid dequeue request arguments.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, "Request content has an invalid format.")));
                 return;
             }
 
@@ -532,7 +584,7 @@ namespace RenderAPI
             {
                 reader.Close();
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync($"Task with identifier {dequeueRequest.TaskId} not found for the current user.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {dequeueRequest.TaskId} not found for the current user.")));
                 return;
             }
 
@@ -556,7 +608,7 @@ namespace RenderAPI
             {
                 reader.Close();
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync($"Task with identifier {dequeueRequest.TaskId} is not in the queue.");
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {dequeueRequest.TaskId} is not in the queue.")));
                 return;
             }
 
@@ -652,7 +704,7 @@ namespace RenderAPI
             }
             reader.Close();
 
-            if (task != null && task.Task.MachineId != null)
+            if (task != null && task?.Task?.MachineId != null)
             {
                 String machineQuery = @"
                         SELECT 
@@ -662,7 +714,7 @@ namespace RenderAPI
                         FROM 
                             machines m
                         WHERE m.machine_id = @MachineId";
-                        
+
 
                 MySqlCommand machineCommand = new MySqlCommand(machineQuery, this._databaseMySqlConnection);
                 machineCommand.Parameters.AddWithValue("@MachineId", task.Task.MachineId);
@@ -685,7 +737,60 @@ namespace RenderAPI
             }
 
             httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await httpContext.Response.WriteAsync("Task successfully dequeued.");
+            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(true, "Task successfully dequeued.")));
+        }
+
+        public async Task HandleDownloadRequest(HttpContext httpContext)
+        {
+            ApiUser? user = AuthenticateAndGetUserInDatabase(httpContext);
+
+            if (user == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await httpContext.Response.WriteAsync(String.Empty);
+                return;
+            }
+
+            if (!httpContext.Request.HasJsonContentType())
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, "Request content type must be application/json.")));
+                return;
+            }
+
+            ApiDownloadRequest? downloadRequest = await httpContext.Request.ReadFromJsonAsync<ApiDownloadRequest>();
+
+            if (downloadRequest == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, "Request content has an invalid format.")));
+                return;
+            }
+
+            String checkTaskQuery = @"
+                SELECT 
+                    t.task_id 
+                FROM 
+                    tasks t 
+                WHERE 
+                    t.task_id = @TaskId AND t.user_id = @UserId";
+
+            MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, this._databaseMySqlConnection);
+            checkTaskCommand.Parameters.AddWithValue("@TaskId", downloadRequest.TaskId);
+            checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
+
+            MySqlDataReader reader = checkTaskCommand.ExecuteReader();
+
+            if (!reader.Read())
+            {
+                reader.Close();
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {downloadRequest.TaskId} not found for the current user.")));
+                return;
+            }
+            reader.Close();
+
+
         }
 
         public void StartPollingService()
@@ -909,7 +1014,7 @@ namespace RenderAPI
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception while starting task {task.Task.TaskId} on machine {machine.MachineId}: {ex.Message}");
+                Console.WriteLine($"Exception while starting task {task?.Task?.TaskId} on machine {machine.MachineId}: {ex.Message}");
             }
 
             return false;
@@ -951,7 +1056,7 @@ namespace RenderAPI
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception while stopping task {task.Task.TaskId} on machine {machine.MachineId}: {ex.Message}");
+                Console.WriteLine($"Exception while stopping task {task?.Task?.TaskId} on machine {machine.MachineId}: {ex.Message}");
             }
 
             return false;

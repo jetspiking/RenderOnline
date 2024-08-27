@@ -4,11 +4,13 @@
     {
         public String ArgTypeId { get; set; }
         public String Value { get; set; }
+        public String Regex { get; set; }
 
-        public ApiArgType(String argTypeId, String value)
+        public ApiArgType(String argTypeId, String value, string regex)
         {
             ArgTypeId=argTypeId;
             Value=value;
+            Regex=regex;
         }
     }
 }
