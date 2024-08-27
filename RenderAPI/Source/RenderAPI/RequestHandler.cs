@@ -22,6 +22,7 @@ using System.Reflection.PortableExecutable;
 using RenderAPI.HPCServer;
 using Mysqlx.Session;
 using Org.BouncyCastle.Crypto.IO;
+using System.IO.Compression;
 
 namespace RenderAPI
 {
@@ -197,7 +198,9 @@ namespace RenderAPI
                         LEFT OUTER JOIN
                             engines e ON r.engine_id = e.engine_id
                         WHERE 
-                            t.user_id = @UserId";
+                            t.user_id = @UserId
+                        ORDER BY t.task_id DESC
+                        LIMIT 15";
 
             MySqlCommand command = new MySqlCommand(retrieveTaskQuery, this._databaseMySqlConnection);
             command.Parameters.AddWithValue("@UserId", user.UserId);
@@ -239,7 +242,7 @@ namespace RenderAPI
                 DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
 
                 ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, String.Empty, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
                 ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
 
                 tasks.Add(new ApiTaskInfo(apiTask, apiRender, apiEngine));
@@ -473,7 +476,7 @@ namespace RenderAPI
                             // Positive integers only
                             isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\d+$");
                             break;
-                        case "integers":
+                        case "integer":
                             // Allow negative and positive integers
                             isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+$");
                             break;
@@ -620,6 +623,7 @@ namespace RenderAPI
                 WHERE task_id = @TaskId";
 
             MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, this._databaseMySqlConnection);
+            deleteQueueCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
 
             deleteQueueCommand.ExecuteNonQuery();
 
@@ -648,8 +652,6 @@ namespace RenderAPI
                                     e.render_argument
                                 FROM 
                                     tasks t
-                                JOIN 
-                                    queue q ON t.task_id = q.task_id
                                 JOIN 
                                     renders r ON t.render_id = r.render_id
                                 JOIN
@@ -697,14 +699,14 @@ namespace RenderAPI
                 DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
 
                 ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
                 ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
 
                 task = new ApiTaskInfo(apiTask, apiRender, apiEngine);
             }
             reader.Close();
 
-            if (task != null && task?.Task?.MachineId != null)
+            if (task != null && task.Task.MachineId != null)
             {
                 String machineQuery = @"
                         SELECT 
@@ -790,7 +792,104 @@ namespace RenderAPI
             }
             reader.Close();
 
+            // Updated query to include arguments from the renders table
+            String retrieveFullTaskQuery = @"
+                                SELECT 
+                                    t.task_id, 
+                                    t.user_id,
+                                    t.queue_time,
+                                    t.start_time, 
+                                    t.end_time, 
+                                    t.is_running, 
+                                    t.is_success,
+                                    t.render_id,
+                                    t.machine_id,
+                                    r.render_id,
+                                    r.file_name,
+                                    r.file_path,
+                                    r.file_size,
+                                    r.arguments,
+                                    r.engine_id
+                                FROM
+                                    tasks t
+                                JOIN 
+                                    renders r ON t.render_id = r.render_id
+                                WHERE 
+                                    t.task_id = @TaskId";
 
+            ApiTaskInfo? task = null;
+
+            MySqlCommand retrieveFullTaskCommand = new MySqlCommand(retrieveFullTaskQuery, this._databaseMySqlConnection);
+            retrieveFullTaskCommand.Parameters.AddWithValue("@TaskId", downloadRequest.TaskId);
+
+            reader = retrieveFullTaskCommand.ExecuteReader();
+
+            if (reader.Read())
+            {
+                // Read task details
+                UInt64 taskId = reader.GetUInt64("task_id");
+                UInt16 userId = reader.GetUInt16("user_id");
+                DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
+                DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
+                DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
+                Boolean isRunning = reader.GetBoolean("is_running");
+                Boolean isSuccess = reader.GetBoolean("is_success");
+                UInt64 renderId = reader.GetUInt64("render_id");
+                Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
+
+                DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
+
+                // Read render details
+                String fileName = reader.GetString("file_name");
+                String filePath = reader.GetString("file_path");
+                UInt64 fileSize = reader.GetUInt64("file_size");
+                String arguments = reader.GetString("arguments");
+                Byte engineId = reader.GetByte("engine_id");
+
+                DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
+
+                ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
+                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+
+                task = new ApiTaskInfo(apiTask, apiRender, null);
+            }
+            reader.Close();
+
+            if (task == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
+                return;
+            }
+
+            String? parentDirectoryPath = task?.Render?.FilePath;
+
+            if (String.IsNullOrEmpty(parentDirectoryPath))
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
+                return;
+            }
+
+            DirectoryInfo? parentDirectory = Directory.GetParent(parentDirectoryPath);
+
+            if (parentDirectory == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
+                return;
+            }
+
+            String zipFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
+            ZipFile.CreateFromDirectory(parentDirectory.FullName, zipFilePath);
+
+            httpContext.Response.StatusCode = StatusCodes.Status200OK;
+            httpContext.Response.ContentType = "application/zip";
+            httpContext.Response.Headers.Append("Content-Disposition", $"attachment; filename={Path.GetFileName(zipFilePath)}");
+            
+            await httpContext.Response.SendFileAsync(zipFilePath);
+
+            File.Delete(zipFilePath);
         }
 
         public void StartPollingService()
@@ -876,7 +975,7 @@ namespace RenderAPI
                             DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
 
                             ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                            ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+                            ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
                             ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
 
                             tasks.Add(new ApiTaskInfo(apiTask, apiRender, apiEngine));
@@ -885,7 +984,7 @@ namespace RenderAPI
 
                         foreach (ApiTaskInfo task in tasks)
                         {
-                            if (task?.Task?.MachineId == null && task?.Task?.IsRunning == false)
+                            if (task.Task.MachineId == null && task.Task.IsRunning == false)
                             {
                                 Console.WriteLine($"Attempting to assign task {task.Task.TaskId} on machine: {task.Task.MachineId}");
 
@@ -894,7 +993,7 @@ namespace RenderAPI
                             }
                             else
                             {
-                                Console.WriteLine($"Checking status of previously started task {task?.Task?.TaskId}");
+                                Console.WriteLine($"Checking status of previously started task {task.Task.TaskId}");
 
                                 // Check the status of tasks already assigned to machines
                                 if (task?.Task != null)
@@ -984,7 +1083,7 @@ namespace RenderAPI
             {
                 Console.WriteLine($"Attempting to start task {task.Task.TaskId} on machine {machine.MachineId}...");
 
-                HPCStartArgs startArgs = new(task.Engine.Name, task.Task.TaskId, task.Render.Arguments);
+                HPCStartArgs startArgs = new(task?.Engine?.Name, task.Task.TaskId, task?.Render?.Arguments);
                 String startMessage = JsonConvert.SerializeObject(startArgs);
 
                 HttpClient httpClient = new HttpClient(this._httpClientHandler);
@@ -1014,7 +1113,7 @@ namespace RenderAPI
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception while starting task {task?.Task?.TaskId} on machine {machine.MachineId}: {ex.Message}");
+                Console.WriteLine($"Exception while starting task {task.Task.TaskId} on machine {machine.MachineId}: {ex.Message}");
             }
 
             return false;
@@ -1056,7 +1155,7 @@ namespace RenderAPI
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception while stopping task {task?.Task?.TaskId} on machine {machine.MachineId}: {ex.Message}");
+                Console.WriteLine($"Exception while stopping task {task.Task.TaskId} on machine {machine.MachineId}: {ex.Message}");
             }
 
             return false;
