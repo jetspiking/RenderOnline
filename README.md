@@ -4,13 +4,15 @@ Solution for Managing and Executing Rendering Tasks on HPC Infrastructure
 ## HPCServer
 - Server running on powerful hardware to allow rendering incoming tasks
 
-# Todo:
-
 ## RenderAPI
 - Communication and handling to database, safe user API
 
+# Todo:
+
 ## RenderOnline
 - Website containing information about the service and pricing for service
+
+## My RenderOnline
 
 ## UserPortal + Desktop Client (webview)
 - Manage tasks, upload projects, and download results
