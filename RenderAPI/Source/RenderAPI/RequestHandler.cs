@@ -80,6 +80,9 @@ namespace RenderAPI
             // Download a rendering result.
             app.MapPost("/renderapi/v1/download", HandleDownloadRequest);
 
+            // Delete a rendering result.
+            app.MapPost("/renderapi/v1/delete", HandleDeleteRequest);
+
             // Start the polling service to monitor render tasks.
             StartPollingService();
 
@@ -892,6 +895,105 @@ namespace RenderAPI
             File.Delete(zipFilePath);
         }
 
+        public async Task HandleDeleteRequest(HttpContext httpContext)
+        {
+            ApiUser? user = AuthenticateAndGetUserInDatabase(httpContext);
+
+            if (user == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await httpContext.Response.WriteAsync(String.Empty);
+                return;
+            }
+
+            if (!httpContext.Request.HasJsonContentType())
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(false, "Request content type must be application/json.")));
+                return;
+            }
+
+            ApiDeleteRequest? deleteRequest = await httpContext.Request.ReadFromJsonAsync<ApiDeleteRequest>();
+
+            if (deleteRequest == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(false, "Request content has an invalid format.")));
+                return;
+            }
+
+            // Verify that the task belongs to the user and get render details
+            String checkTaskQuery = @"
+                    SELECT 
+                        t.task_id, 
+                        r.render_id,
+                        r.file_path 
+                    FROM 
+                        tasks t 
+                    JOIN 
+                        renders r ON t.render_id = r.render_id 
+                    WHERE 
+                        t.task_id = @TaskId AND t.user_id = @UserId";
+
+            MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, this._databaseMySqlConnection);
+            checkTaskCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
+            checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
+
+            MySqlDataReader reader = checkTaskCommand.ExecuteReader();
+
+            if (!reader.Read())
+            {
+                reader.Close();
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(false, $"Task with identifier {deleteRequest.TaskId} not found for the current user.")));
+                return;
+            }
+
+            // Retrieve the render_id and file path
+            UInt64 renderId = reader.GetUInt64("render_id");
+            String filePath = reader.GetString("file_path");
+            reader.Close();
+
+            // Remove the task from the queue first
+            String deleteQueueQuery = @"
+                    DELETE FROM queue 
+                    WHERE task_id = @TaskId";
+
+            MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, this._databaseMySqlConnection);
+            deleteQueueCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
+            deleteQueueCommand.ExecuteNonQuery();
+
+            // Delete the folder containing the task details
+            String? parentDirectoryPath = Path.GetDirectoryName(filePath);
+
+            if (parentDirectoryPath != null && Directory.Exists(parentDirectoryPath))
+            {
+                Directory.Delete(parentDirectoryPath, true);
+            }
+
+            // Delete the task itself
+            String deleteTaskQuery = @"
+                    DELETE FROM tasks 
+                    WHERE task_id = @TaskId";
+
+            MySqlCommand deleteTaskCommand = new MySqlCommand(deleteTaskQuery, this._databaseMySqlConnection);
+            deleteTaskCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
+            deleteTaskCommand.ExecuteNonQuery();
+
+            // Delete the render associated with the task
+            String deleteRenderQuery = @"
+                    DELETE FROM renders 
+                    WHERE render_id = @RenderId";
+
+            MySqlCommand deleteRenderCommand = new MySqlCommand(deleteRenderQuery, this._databaseMySqlConnection);
+            deleteRenderCommand.Parameters.AddWithValue("@RenderId", renderId);
+            deleteRenderCommand.ExecuteNonQuery();
+
+            httpContext.Response.StatusCode = StatusCodes.Status200OK;
+            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(true, "Task and associated render successfully deleted.")));
+        }
+
+
         public void StartPollingService()
         {
             Task.Run(async () =>
@@ -1083,7 +1185,7 @@ namespace RenderAPI
             {
                 Console.WriteLine($"Attempting to start task {task.Task.TaskId} on machine {machine.MachineId}...");
 
-                HPCStartArgs startArgs = new(task?.Engine?.Name, task.Task.TaskId, task?.Render?.Arguments);
+                HPCStartArgs startArgs = new(task.Engine?.Name, task.Task.TaskId, task.Render?.Arguments);
                 String startMessage = JsonConvert.SerializeObject(startArgs);
 
                 HttpClient httpClient = new HttpClient(this._httpClientHandler);
