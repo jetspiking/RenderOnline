@@ -35,7 +35,7 @@ namespace RenderAPI
 
         public RequestHandler(WebApplication app)
         {
-            const String configurationFileName = "Configuration.json";
+            const String configurationFileName = "RenderAPI.json";
             String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configurationFileName);
 
             this._httpClientHandler = new();

@@ -22,7 +22,7 @@ namespace HPCServer
 
         public RequestHandler(WebApplication app)
         {
-            const String configurationFileName = "Configuration.json";
+            const String configurationFileName = "HPCServer.json";
             String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configurationFileName);
 
             Console.WriteLine("Searching for configuration file: "+configurationFilePath);
