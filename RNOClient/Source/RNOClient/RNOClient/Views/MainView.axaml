@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="RNOClient.Views.MainView"
+			 HorizontalAlignment="Stretch"
+			 VerticalAlignment="Stretch"
+			 FontFamily="Consolas"
+			 Foreground="#888821"
+             >
+
+	<DockPanel Name="RootPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="10,10,10,10">
+		<DockPanel Name="GreetPanel" Height="50" DockPanel.Dock="Top" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="10,0,10,0">
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="10,20,10,0">
+				<Image Name="AppIcon"/>
+				<Label Name="TitleLabel" Content="RenderOnline" FontSize="26" FontWeight="Bold"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,10,0">
+				<StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="5,0,5,0">
+					<Label Name="EmailLabel" FontWeight="Bold" Content="Email"/>
+					<TextBox Name="EmailBox" Width="275"/>
+				</StackPanel>
+				<StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="5,0,5,0">
+					<Label Name="TokenLabel" FontWeight="Bold" Content="Token"/>
+					<TextBox Name="TokenBox" Width="275" PasswordChar="*" />
+				</StackPanel>
+				<Image Name="ValidateButton" Source="/Assets/validate.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,0,0,0"/>
+			</StackPanel>
+		</DockPanel>
+
+		<ScrollViewer>
+		<DockPanel>
+			<StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,25,15,5">
+				<DockPanel Name="UploadPanel" Height="80" HorizontalAlignment="Stretch" VerticalAlignment="Top" >
+					<Separator Background="black" HorizontalAlignment="Stretch" DockPanel.Dock="Top"/>
+					<StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left" Margin="15,0,0,0">
+						<StackPanel Orientation="Vertical">
+							<Label Name="QueuedHintLabel" Foreground="Black" FontWeight="Bold" Content="Queued:"/>
+							<Label Name="TaskHintLabel" Foreground="Black" FontWeight="Bold" Content="Tasks:"/>
+						</StackPanel>
+						<StackPanel Orientation="Vertical" Width="50">
+							<Label Name="QueueCountLabel" Foreground="Black" Content=""/>
+							<Label Name="TasksCountLabel" Foreground="Black" Content=""/>
+						</StackPanel>
+					</StackPanel>
+					<StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="50,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+						<ComboBox Name="EngineBox" Width="150" Foreground="Black" VerticalAlignment="Center" Margin="5,0,15,0"/>
+						<Button>
+							<Image Name="UploadButton" Source="/Assets/upload.png" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+						</Button>
+						<Label Content="Upload" FontWeight="Bold" VerticalAlignment="Center"/>
+					</StackPanel>
+				</DockPanel>
+				<Separator Background="black" HorizontalAlignment="Stretch"/>
+				<ScrollViewer VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Visible" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+					<StackPanel Name="TasksPanel" Orientation="Vertical" VerticalAlignment="Top" DockPanel.Dock="Bottom">
+					</StackPanel>
+				</ScrollViewer>
+			</StackPanel>
+		</DockPanel>
+		</ScrollViewer>
+	</DockPanel>
+</UserControl>
