@@ -759,7 +759,7 @@ namespace RenderAPI
             if (!httpContext.Request.HasJsonContentType())
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, "Request content type must be application/json.")));
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, "Request content type must be application/json.")));
                 return;
             }
 
@@ -768,7 +768,7 @@ namespace RenderAPI
             if (downloadRequest == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, "Request content has an invalid format.")));
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, "Request content has an invalid format.")));
                 return;
             }
 
@@ -790,7 +790,7 @@ namespace RenderAPI
             {
                 reader.Close();
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {downloadRequest.TaskId} not found for the current user.")));
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found for the current user.")));
                 return;
             }
             reader.Close();
@@ -861,7 +861,7 @@ namespace RenderAPI
             if (task == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
                 return;
             }
 
@@ -870,7 +870,7 @@ namespace RenderAPI
             if (String.IsNullOrEmpty(parentDirectoryPath))
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
                 return;
             }
 
@@ -879,7 +879,7 @@ namespace RenderAPI
             if (parentDirectory == null)
             {
                 httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
                 return;
             }
 
