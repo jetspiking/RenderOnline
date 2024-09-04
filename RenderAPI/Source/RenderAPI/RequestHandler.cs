@@ -30,7 +30,6 @@ namespace RenderAPI
     {
         private Core.Configuration.RenderServer _renderApiConfiguration;
 
-        private MySqlConnection _databaseMySqlConnection;
         private HttpClientHandler _httpClientHandler;
 
         public RequestHandler(WebApplication app)
@@ -57,7 +56,7 @@ namespace RenderAPI
 
             this._renderApiConfiguration = configuration;
 
-            if (!InitializeDatabaseConnection() || this._databaseMySqlConnection == null)
+            if (!InitializeDatabaseConnection())
             {
                 Console.WriteLine("Failed to connect to the database. Exiting...");
                 Console.ReadKey();
@@ -93,16 +92,16 @@ namespace RenderAPI
         {
             try
             {
-                _databaseMySqlConnection = new(_renderApiConfiguration.ConnectionString);
-                _databaseMySqlConnection.Open();
-
-                Console.WriteLine("Database connection successful!");
-                return true;
-
+                using (MySqlConnection connection = new MySqlConnection(_renderApiConfiguration.ConnectionString))
+                {
+                    connection.Open();
+                    Console.WriteLine("Database connection successful!");
+                    return true;
+                }
             }
-            catch (MySqlException ex)
+            catch (MySqlException e)
             {
-                Console.WriteLine($"Database connection error: {ex.Message}");
+                Console.WriteLine($"Database connection error: {e.Message}");
                 return false;
             }
         }
@@ -409,7 +408,11 @@ namespace RenderAPI
                             Directory.CreateDirectory(directory);
 
                         String filePath = Path.Combine(directory, uploadedFile.FileName);
-                        await uploadedFile.CopyToAsync(new FileStream(filePath, FileMode.OpenOrCreate));
+
+                        await using (FileStream fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
+                        {
+                            await uploadedFile.CopyToAsync(fileStream);
+                        }
 
                         UInt64 fileSize = (UInt64)uploadedFile.Length;
                         String fileArguments = engine.RenderArgument;
@@ -786,17 +789,21 @@ namespace RenderAPI
                 return;
             }
 
+            ApiTaskInfo? task = null;
+
+            // Use a narrower scope for the MySQL connection
             using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
                 connection.Open();
 
+                // Validate the task and user ownership
                 String checkTaskQuery = @"
-            SELECT 
-                t.task_id 
-            FROM 
-                tasks t 
-            WHERE 
-                t.task_id = @TaskId AND t.user_id = @UserId";
+        SELECT 
+            t.task_id 
+        FROM 
+            tasks t 
+        WHERE 
+            t.task_id = @TaskId AND t.user_id = @UserId";
 
                 using (MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, connection))
                 {
@@ -815,31 +822,30 @@ namespace RenderAPI
                     }
                 }
 
+                // Retrieve task information
                 String retrieveFullTaskQuery = @"
-            SELECT 
-                t.task_id, 
-                t.user_id,
-                t.queue_time,
-                t.start_time, 
-                t.end_time, 
-                t.is_running, 
-                t.is_success,
-                t.render_id,
-                t.machine_id,
-                r.render_id,
-                r.file_name,
-                r.file_path,
-                r.file_size,
-                r.arguments,
-                r.engine_id
-            FROM
-                tasks t
-            JOIN 
-                renders r ON t.render_id = r.render_id
-            WHERE 
-                t.task_id = @TaskId";
-
-                ApiTaskInfo? task = null;
+        SELECT 
+            t.task_id, 
+            t.user_id,
+            t.queue_time,
+            t.start_time, 
+            t.end_time, 
+            t.is_running, 
+            t.is_success,
+            t.render_id,
+            t.machine_id,
+            r.render_id,
+            r.file_name,
+            r.file_path,
+            r.file_size,
+            r.arguments,
+            r.engine_id
+        FROM
+            tasks t
+        JOIN 
+            renders r ON t.render_id = r.render_id
+        WHERE 
+            t.task_id = @TaskId";
 
                 using (MySqlCommand retrieveFullTaskCommand = new MySqlCommand(retrieveFullTaskQuery, connection))
                 {
@@ -876,69 +882,76 @@ namespace RenderAPI
                         }
                     }
                 }
+            }
 
-                if (task == null)
+            if (task == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
+                return;
+            }
+
+            String? parentDirectoryPath = task?.Render?.FilePath;
+
+            if (String.IsNullOrEmpty(parentDirectoryPath))
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
+                return;
+            }
+
+            DirectoryInfo? parentDirectory = Directory.GetParent(parentDirectoryPath);
+
+            if (parentDirectory == null)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
+                return;
+            }
+
+            String zipFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
+
+            Boolean zipCreated = false;
+            for (UInt32 i = 0; i < 15; i++)
+            {
+                try
                 {
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
-                    return;
+                    ZipFile.CreateFromDirectory(parentDirectory.FullName, zipFilePath);
+                    zipCreated = true;
+                    break;
                 }
-
-                String? parentDirectoryPath = task?.Render?.FilePath;
-
-                if (String.IsNullOrEmpty(parentDirectoryPath))
+                catch (Exception)
                 {
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
-                    return;
+                    await Task.Delay(250);
                 }
+            }
 
-                DirectoryInfo? parentDirectory = Directory.GetParent(parentDirectoryPath);
+            if (!zipCreated)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, "Failed to create ZIP archive after multiple attempts!")));
+                return;
+            }
 
-                if (parentDirectory == null)
+            httpContext.Response.StatusCode = StatusCodes.Status200OK;
+            httpContext.Response.ContentType = "application/zip";
+            httpContext.Response.Headers.Append("Content-Disposition", $"attachment; filename={Path.GetFileName(zipFilePath)}");
+
+            await httpContext.Response.SendFileAsync(zipFilePath);
+
+            for (UInt32 i = 0; i < 15; i++)
+            {
+                try
                 {
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
-                    return;
+                    File.Delete(zipFilePath);
+                    break;
                 }
-
-                String zipFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
-
-                for (UInt32 i = 0; i < 15; i++)
+                catch (Exception)
                 {
-                    try
-                    {
-                        ZipFile.CreateFromDirectory(parentDirectory.FullName, zipFilePath);
-                        break;
-                    }
-                    catch (Exception)
-                    {
-                        await Task.Delay(100);
-                    }
-                }
-
-
-                httpContext.Response.StatusCode = StatusCodes.Status200OK;
-                httpContext.Response.ContentType = "application/zip";
-                httpContext.Response.Headers.Append("Content-Disposition", $"attachment; filename={Path.GetFileName(zipFilePath)}");
-
-                await httpContext.Response.SendFileAsync(zipFilePath);
-
-                for (UInt32 i = 0; i < 15; i++)
-                {
-                    try
-                    {
-                        File.Delete(zipFilePath);
-                        break;
-                    }
-                    catch (Exception)
-                    {
-                        await Task.Delay(100);
-                    }
+                    await Task.Delay(250);
                 }
             }
         }
-
 
         public async Task HandleDeleteRequest(HttpContext httpContext)
         {
@@ -1070,84 +1083,89 @@ namespace RenderAPI
 
                     try
                     {
-                        // Updated query to include arguments from the renders table
                         String query = @"
-                                SELECT 
-                                    t.task_id, 
-                                    t.user_id,
-                                    t.queue_time,
-                                    t.start_time, 
-                                    t.end_time, 
-                                    t.is_running, 
-                                    t.is_success,
-                                    t.render_id,
-                                    t.machine_id,
-                                    r.render_id,
-                                    r.file_name,
-                                    r.file_path,
-                                    r.file_size,
-                                    r.arguments,
-                                    r.engine_id,
-                                    e.engine_id,
-                                    e.name,
-                                    e.extension,
-                                    e.download_path,
-                                    e.render_argument
-                                FROM 
-                                    tasks t
-                                JOIN 
-                                    queue q ON t.task_id = q.task_id
-                                JOIN 
-                                    renders r ON t.render_id = r.render_id
-                                JOIN
-                                    engines e ON r.engine_id = e.engine_id
-                                WHERE 
-                                    t.is_success = 0";
+                        SELECT 
+                            t.task_id, 
+                            t.user_id,
+                            t.queue_time,
+                            t.start_time, 
+                            t.end_time, 
+                            t.is_running, 
+                            t.is_success,
+                            t.render_id,
+                            t.machine_id,
+                            r.render_id,
+                            r.file_name,
+                            r.file_path,
+                            r.file_size,
+                            r.arguments,
+                            r.engine_id,
+                            e.engine_id,
+                            e.name,
+                            e.extension,
+                            e.download_path,
+                            e.render_argument
+                        FROM 
+                            tasks t
+                        JOIN 
+                            queue q ON t.task_id = q.task_id
+                        JOIN 
+                            renders r ON t.render_id = r.render_id
+                        JOIN
+                            engines e ON r.engine_id = e.engine_id
+                        WHERE 
+                            t.is_success = 0";
 
                         List<ApiTaskInfo> tasks = new();
 
-                        MySqlCommand command = new MySqlCommand(query, this._databaseMySqlConnection);
-                        MySqlDataReader reader = command.ExecuteReader();
-
-                        while (reader.Read())
+                        using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                         {
-                            // Read task details
-                            UInt64 taskId = reader.GetUInt64("task_id");
-                            UInt16 userId = reader.GetUInt16("user_id");
-                            DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
-                            DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
-                            DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
-                            Boolean isRunning = reader.GetBoolean("is_running");
-                            Boolean isSuccess = reader.GetBoolean("is_success");
-                            UInt64 renderId = reader.GetUInt64("render_id");
-                            Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
+                            connection.Open();
+                            using (MySqlCommand command = new MySqlCommand(query, connection))
+                            {
+                                using (MySqlDataReader reader = command.ExecuteReader())
+                                {
+                                    while (reader.Read())
+                                    {
+                                        // Read task details
+                                        UInt64 taskId = reader.GetUInt64("task_id");
+                                        UInt16 userId = reader.GetUInt16("user_id");
+                                        DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
+                                        DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
+                                        DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
+                                        Boolean isRunning = reader.GetBoolean("is_running");
+                                        Boolean isSuccess = reader.GetBoolean("is_success");
+                                        UInt64 renderId = reader.GetUInt64("render_id");
+                                        Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
 
-                            DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
+                                        DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
 
-                            // Read render details
-                            String fileName = reader.GetString("file_name");
-                            String filePath = reader.GetString("file_path");
-                            UInt64 fileSize = reader.GetUInt64("file_size");
-                            String arguments = reader.GetString("arguments");
-                            Byte engineId = reader.GetByte("engine_id");
+                                        // Read render details
+                                        String fileName = reader.GetString("file_name");
+                                        String filePath = reader.GetString("file_path");
+                                        UInt64 fileSize = reader.GetUInt64("file_size");
+                                        String arguments = reader.GetString("arguments");
+                                        Byte engineId = reader.GetByte("engine_id");
 
-                            DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
+                                        DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
 
-                            // Read engine details
-                            String engineName = reader.GetString("name");
-                            String extension = reader.GetString("extension");
-                            String downloadPath = reader.GetString("download_path");
-                            String renderArgument = reader.GetString("render_argument");
+                                        // Read engine details
+                                        String engineName = reader.GetString("name");
+                                        String extension = reader.GetString("extension");
+                                        String downloadPath = reader.GetString("download_path");
+                                        String renderArgument = reader.GetString("render_argument");
 
-                            DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
+                                        DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
 
-                            ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                            ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
-                            ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
+                                        ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
+                                        ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+                                        ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
 
-                            tasks.Add(new ApiTaskInfo(apiTask, apiRender, apiEngine));
+                                        tasks.Add(new ApiTaskInfo(apiTask, apiRender, apiEngine));
+                                    }
+                                }
+                            }
                         }
-                        reader.Close();
 
                         foreach (ApiTaskInfo task in tasks)
                         {
@@ -1168,11 +1186,11 @@ namespace RenderAPI
                             }
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception e)
                     {
                         // Log any errors during polling
-                        Console.WriteLine($"Polling service error: {ex.Message}");
-                        Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+                        Console.WriteLine($"Polling service error: {e.Message}");
+                        Console.WriteLine($"Stack Trace: {e.StackTrace}");
                     }
                 }
             });
@@ -1190,57 +1208,63 @@ namespace RenderAPI
                         FROM 
                             machines m";
 
-                MySqlCommand machineCommand = new MySqlCommand(machineQuery, this._databaseMySqlConnection);
-                MySqlDataReader machineReader = machineCommand.ExecuteReader();
-
-                List<DbMachine> machines = new();
-
-                while (machineReader.Read())
+                using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                 {
-                    Byte machineId = machineReader.GetByte("machine_id");
-                    String ipAddress = machineReader.GetString("ip_address");
-                    UInt16 port = machineReader.GetUInt16("port");
-
-                    machines.Add(new DbMachine(machineId, ipAddress, port));
-                }
-                machineReader.Close();
-
-                foreach (DbMachine machine in machines)
-                {
-                    HttpClient httpClient = new HttpClient(this._httpClientHandler);
-                    httpClient.BaseAddress = new Uri($"https://{machine.IpAddress}:{machine.Port}");
-                    HttpResponseMessage statusResponse = await httpClient.GetAsync("/hpc/status");
-
-                    if (statusResponse.IsSuccessStatusCode)
+                    connection.Open();
+                    using (MySqlCommand machineCommand = new MySqlCommand(machineQuery, connection))
                     {
-                        String statusResponseContent = await statusResponse.Content.ReadAsStringAsync();
-                        HPCStatusResponse? status = JsonConvert.DeserializeObject<HPCStatusResponse>(statusResponseContent);
-
-                        if (status == null)
+                        using (MySqlDataReader machineReader = machineCommand.ExecuteReader())
                         {
-                            Console.WriteLine($"Machine {machine.MachineId} invalid response!");
-                            continue;
-                        }
+                            List<DbMachine> machines = new();
 
-                        if (status.Task == null || !status.Task.IsRunning)
-                        {
-                            // Attempt to start task on available machine
-                            if (await StartTaskOnMachine(machine, task))
+                            while (machineReader.Read())
                             {
-                                UpdateTaskStartDetails(task.Task.TaskId, machine.MachineId);
-                                break;
+                                Byte machineId = machineReader.GetByte("machine_id");
+                                String ipAddress = machineReader.GetString("ip_address");
+                                UInt16 port = machineReader.GetUInt16("port");
+
+                                machines.Add(new DbMachine(machineId, ipAddress, port));
+                            }
+
+                            foreach (DbMachine machine in machines)
+                            {
+                                HttpClient httpClient = new HttpClient(this._httpClientHandler);
+                                httpClient.BaseAddress = new Uri($"https://{machine.IpAddress}:{machine.Port}");
+                                HttpResponseMessage statusResponse = await httpClient.GetAsync("/hpc/status");
+
+                                if (statusResponse.IsSuccessStatusCode)
+                                {
+                                    String statusResponseContent = await statusResponse.Content.ReadAsStringAsync();
+                                    HPCStatusResponse? status = JsonConvert.DeserializeObject<HPCStatusResponse>(statusResponseContent);
+
+                                    if (status == null)
+                                    {
+                                        Console.WriteLine($"Machine {machine.MachineId} invalid response!");
+                                        continue;
+                                    }
+
+                                    if (status.Task == null || !status.Task.IsRunning)
+                                    {
+                                        // Attempt to start task on available machine
+                                        if (await StartTaskOnMachine(machine, task))
+                                        {
+                                            UpdateTaskStartDetails(task.Task.TaskId, machine.MachineId);
+                                            break;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Failed to get status from machine {machine.MachineId}.");
+                                }
                             }
                         }
                     }
-                    else
-                    {
-                        Console.WriteLine($"Failed to get status from machine {machine.MachineId}.");
-                    }
                 }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Error in assigning task to machine: {ex.Message}");
+                Console.WriteLine($"Error in assigning task to machine: {e.Message}");
             }
         }
 
@@ -1278,9 +1302,9 @@ namespace RenderAPI
                     Console.WriteLine($"HTTP error while starting task {task.Task.TaskId} on machine {machine.MachineId}: {startResponse.StatusCode}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Exception while starting task {task.Task.TaskId} on machine {machine.MachineId}: {ex.Message}");
+                Console.WriteLine($"Exception while starting task {task.Task.TaskId} on machine {machine.MachineId}: {e.Message}");
             }
 
             return false;
@@ -1320,9 +1344,9 @@ namespace RenderAPI
                     Console.WriteLine($"HTTP error while stopping task {task.Task.TaskId} on machine {machine.MachineId}: {stopResponse.StatusCode}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Exception while stopping task {task.Task.TaskId} on machine {machine.MachineId}: {ex.Message}");
+                Console.WriteLine($"Exception while stopping task {task.Task.TaskId} on machine {machine.MachineId}: {e.Message}");
             }
 
             return false;
@@ -1337,18 +1361,23 @@ namespace RenderAPI
                         SET start_time = @StartTime, is_running = 1, machine_id = @MachineId 
                         WHERE task_id = @TaskId";
 
-                using (MySqlCommand updateTaskCommand = new MySqlCommand(updateTaskQuery, this._databaseMySqlConnection))
+                using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                 {
-                    updateTaskCommand.Parameters.AddWithValue("@StartTime", DateTime.Now);
-                    updateTaskCommand.Parameters.AddWithValue("@MachineId", machineId);
-                    updateTaskCommand.Parameters.AddWithValue("@TaskId", taskId);
-                    updateTaskCommand.ExecuteNonQuery();
+                    connection.Open();
+                    using (MySqlCommand updateTaskCommand = new MySqlCommand(updateTaskQuery, connection))
+                    {
+                        updateTaskCommand.Parameters.AddWithValue("@StartTime", DateTime.Now);
+                        updateTaskCommand.Parameters.AddWithValue("@MachineId", machineId);
+                        updateTaskCommand.Parameters.AddWithValue("@TaskId", taskId);
+                        updateTaskCommand.ExecuteNonQuery();
+                    }
                 }
+
                 Console.WriteLine($"Task {taskId} successfully started on machine {machineId}.");
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Failed to update task start details for Task {taskId}: {ex.Message}");
+                Console.WriteLine($"Failed to update task start details for Task {taskId}: {e.Message}");
             }
         }
 
@@ -1363,68 +1392,72 @@ namespace RenderAPI
             try
             {
                 String machineQuery = @"
-                        SELECT 
-                            m.machine_id, 
-                            m.ip_address, 
-                            m.port 
-                        FROM 
-                            machines m
-                        WHERE 
-                            m.machine_id = @MachineId";
+                SELECT 
+                    m.machine_id, 
+                    m.ip_address, 
+                    m.port 
+                FROM 
+                    machines m
+                WHERE 
+                    m.machine_id = @MachineId";
 
-                using (MySqlCommand machineCommand = new MySqlCommand(machineQuery, this._databaseMySqlConnection))
+                using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                 {
-                    machineCommand.Parameters.AddWithValue("@MachineId", task.MachineId);
-                    using (MySqlDataReader reader = machineCommand.ExecuteReader())
+                    connection.Open();
+                    using (MySqlCommand machineCommand = new MySqlCommand(machineQuery, connection))
                     {
-                        if (reader.Read())
+                        machineCommand.Parameters.AddWithValue("@MachineId", task.MachineId);
+                        using (MySqlDataReader reader = machineCommand.ExecuteReader())
                         {
-                            String ipAddress = reader.GetString("ip_address");
-                            UInt16 port = reader.GetUInt16("port");
-                            reader.Close();
-
-                            HttpClient httpClient = new HttpClient(this._httpClientHandler);
-                            httpClient.BaseAddress = new Uri($"https://{ipAddress}:{port}");
-                            HttpResponseMessage statusResponse = await httpClient.GetAsync("/hpc/status");
-
-                            if (statusResponse.IsSuccessStatusCode)
+                            if (reader.Read())
                             {
-                                String statusResponseContent = await statusResponse.Content.ReadAsStringAsync();
-                                HPCStatusResponse? status = JsonConvert.DeserializeObject<HPCStatusResponse>(statusResponseContent);
+                                String ipAddress = reader.GetString("ip_address");
+                                UInt16 port = reader.GetUInt16("port");
+                                reader.Close();
 
-                                if (status == null)
+                                HttpClient httpClient = new HttpClient(this._httpClientHandler);
+                                httpClient.BaseAddress = new Uri($"https://{ipAddress}:{port}");
+                                HttpResponseMessage statusResponse = await httpClient.GetAsync("/hpc/status");
+
+                                if (statusResponse.IsSuccessStatusCode)
                                 {
-                                    Console.WriteLine($"Machine {task.MachineId} invalid response!");
-                                    return;
+                                    String statusResponseContent = await statusResponse.Content.ReadAsStringAsync();
+                                    HPCStatusResponse? status = JsonConvert.DeserializeObject<HPCStatusResponse>(statusResponseContent);
+
+                                    if (status == null)
+                                    {
+                                        Console.WriteLine($"Machine {task.MachineId} invalid response!");
+                                        return;
+                                    }
+
+                                    if (status.Task != null)
+                                    {
+                                        if (!status.Task.IsRunning && status.Task.IsSuccess)
+                                        {
+                                            CompleteTask(task.TaskId);
+                                        }
+                                        else if (!status.Task.IsRunning && !status.Task.IsSuccess)
+                                        {
+                                            HandleTaskFailure(task.TaskId, (Byte)task.MachineId);
+                                        }
+                                    }
                                 }
-
-                                if (status.Task != null)
+                                else
                                 {
-                                    if (!status.Task.IsRunning && status.Task.IsSuccess)
-                                    {
-                                        CompleteTask(task.TaskId);
-                                    }
-                                    else if (!status.Task.IsRunning && !status.Task.IsSuccess)
-                                    {
-                                        HandleTaskFailure(task.TaskId, (Byte)task.MachineId);
-                                    }
+                                    Console.WriteLine($"Failed to get status from machine {task.MachineId}: {statusResponse.StatusCode}");
                                 }
                             }
                             else
                             {
-                                Console.WriteLine($"Failed to get status from machine {task.MachineId}: {statusResponse.StatusCode}");
+                                Console.WriteLine($"Machine with ID {task.MachineId} not found.");
                             }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Machine with ID {task.MachineId} not found.");
                         }
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Error checking task status on machine {task.MachineId}: {ex.Message}");
+                Console.WriteLine($"Error checking task status on machine {task.MachineId}: {e.Message}");
             }
         }
 
@@ -1437,19 +1470,23 @@ namespace RenderAPI
                         SET end_time = @EndTime, is_running = 0, is_success = 1 
                         WHERE task_id = @TaskId";
 
-                using (MySqlCommand completeTaskCommand = new MySqlCommand(completeTaskQuery, this._databaseMySqlConnection))
+                using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                 {
-                    completeTaskCommand.Parameters.AddWithValue("@EndTime", DateTime.Now);
-                    completeTaskCommand.Parameters.AddWithValue("@TaskId", taskId);
-                    completeTaskCommand.ExecuteNonQuery();
+                    connection.Open();
+                    using (MySqlCommand completeTaskCommand = new MySqlCommand(completeTaskQuery, connection))
+                    {
+                        completeTaskCommand.Parameters.AddWithValue("@EndTime", DateTime.Now);
+                        completeTaskCommand.Parameters.AddWithValue("@TaskId", taskId);
+                        completeTaskCommand.ExecuteNonQuery();
+                    }
                 }
 
                 RemoveTaskFromQueue(taskId);
                 Console.WriteLine($"Task {taskId} completed successfully.");
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Error completing task {taskId}: {ex.Message}");
+                Console.WriteLine($"Error completing task {taskId}: {e.Message}");
             }
         }
 
@@ -1462,21 +1499,25 @@ namespace RenderAPI
                             SET start_time = @StartTime, end_time = @EndTime, is_running = 0, is_success = 0, machine_id = @MachineId 
                             WHERE task_id = @TaskId";
 
-                using (MySqlCommand failTaskCommand = new MySqlCommand(failTaskQuery, this._databaseMySqlConnection))
+                using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                 {
-                    failTaskCommand.Parameters.AddWithValue("@StartTime", DateTime.Now);
-                    failTaskCommand.Parameters.AddWithValue("@EndTime", DateTime.Now);
-                    failTaskCommand.Parameters.AddWithValue("@MachineId", machineId);
-                    failTaskCommand.Parameters.AddWithValue("@TaskId", taskId);
-                    failTaskCommand.ExecuteNonQuery();
+                    connection.Open();
+                    using (MySqlCommand failTaskCommand = new MySqlCommand(failTaskQuery, connection))
+                    {
+                        failTaskCommand.Parameters.AddWithValue("@StartTime", DateTime.Now);
+                        failTaskCommand.Parameters.AddWithValue("@EndTime", DateTime.Now);
+                        failTaskCommand.Parameters.AddWithValue("@MachineId", machineId);
+                        failTaskCommand.Parameters.AddWithValue("@TaskId", taskId);
+                        failTaskCommand.ExecuteNonQuery();
+                    }
                 }
 
                 RemoveTaskFromQueue(taskId);
                 Console.WriteLine($"Task {taskId} failed on machine {machineId}.");
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Error handling task failure for Task {taskId} on Machine {machineId}: {ex.Message}");
+                Console.WriteLine($"Error handling task failure for Task {taskId} on Machine {machineId}: {e.Message}");
             }
         }
 
@@ -1488,16 +1529,21 @@ namespace RenderAPI
                         DELETE FROM queue 
                         WHERE task_id = @TaskId";
 
-                using (MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, this._databaseMySqlConnection))
+                using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
                 {
-                    deleteQueueCommand.Parameters.AddWithValue("@TaskId", taskId);
-                    deleteQueueCommand.ExecuteNonQuery();
+                    connection.Open();
+                    using (MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, connection))
+                    {
+                        deleteQueueCommand.Parameters.AddWithValue("@TaskId", taskId);
+                        deleteQueueCommand.ExecuteNonQuery();
+                    }
                 }
+
                 Console.WriteLine($"Task {taskId} removed from queue.");
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine($"Error removing task {taskId} from queue: {ex.Message}");
+                Console.WriteLine($"Error removing task {taskId} from queue: {e.Message}");
             }
         }
     }
