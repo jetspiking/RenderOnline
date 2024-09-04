@@ -27,7 +27,7 @@ using System.Text;
 
 namespace RNOClient.Views
 {
-    public partial class MainView : UserControl, ITaskListener
+    public partial class MainView : UserControl, ITaskListener, IUIInfluencer
     {
         private String _ipAddress = "127.0.0.1";
         private String _port = "5001";
@@ -63,7 +63,12 @@ namespace RNOClient.Views
 
             this.ValidateButton.PointerPressed += (sender, e) => RenderAPIInfoRequest();
 
-            this.UploadButton.PointerPressed += (sender, e) => { };
+            this.UploadButton.PointerPressed += (sender, e) =>
+            {
+                this.UploadViewer.Content = new UploadView(this as ITaskListener, this as IUIInfluencer);
+                TasksViewer.IsVisible = false;
+                UploadViewer.IsVisible = true;
+            };
         }
 
         private async void RenderAPIInfoRequest()
@@ -135,7 +140,7 @@ namespace RNOClient.Views
             }
         }
 
-        private async void RenderAPIDeleteRequest(ApiTaskInfo apiTaskInfo)
+        private async Task RenderAPIDeleteRequest(ApiTaskInfo apiTaskInfo)
         {
             HttpClient httpClient = new HttpClient(this._httpClientHandler);
 
@@ -184,7 +189,7 @@ namespace RNOClient.Views
             }
         }
 
-        private async void RenderAPIDownloadRequest(ApiTaskInfo apiTaskInfo)
+        private async Task RenderAPIDownloadRequest(ApiTaskInfo apiTaskInfo)
         {
             HttpClient httpClient = new HttpClient(this._httpClientHandler);
 
@@ -236,90 +241,91 @@ namespace RNOClient.Views
             }
         }
 
-        private async void RenderAPIEnqueueRequest(ApiEnqueueRequest task, String filePath)
+        private async Task RenderAPIEnqueueRequest(ApiEnqueueRequest task, String filePath)
         {
             HttpClient httpClient = new HttpClient(this._httpClientHandler);
-
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
             httpClient.DefaultRequestHeaders.Add("token", this.TokenBox.Text);
             httpClient.BaseAddress = new Uri($"https://{_ipAddress}:{_port}");
 
             MultipartFormDataContent content = new MultipartFormDataContent();
+            FileStream? fileStream = null;
+            StreamContent? fileContent = null;
 
             try
             {
                 // Serialize the task to JSON and add it as a string content
-                string jsonTask = JsonConvert.SerializeObject(task);
+                String jsonTask = JsonConvert.SerializeObject(task);
                 StringContent jsonContent = new StringContent(jsonTask, Encoding.UTF8, "application/json");
-                content.Add(jsonContent, "request");
+
+                // Add content-disposition header manually for the request JSON part
+                jsonContent.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                {
+                    Name = "\"request\""
+                };
+
+                content.Add(jsonContent);
 
                 // Add the file content
-                FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                StreamContent fileContent = new StreamContent(fileStream);
+                fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+                fileContent = new StreamContent(fileStream);
                 fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-                content.Add(fileContent, "file", Path.GetFileName(filePath));
+
+                // Add content-disposition header manually for the file part
+                fileContent.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                {
+                    Name = "\"file\"",
+                    FileName = $"\"{Path.GetFileName(filePath)}\""
+                };
+
+                content.Add(fileContent);
 
                 // Send the request
                 HttpResponseMessage statusResponse = await httpClient.PostAsync("/renderapi/v1/enqueue", content);
+                
+                String responseBody = await statusResponse.Content.ReadAsStringAsync();
+                ApiEnqueueResponse? apiEnqueueResponse = JsonConvert.DeserializeObject<ApiEnqueueResponse>(responseBody);
 
                 if (statusResponse.IsSuccessStatusCode)
                 {
-                    string responseBody = await statusResponse.Content.ReadAsStringAsync();
-                    ApiEnqueueResponse? apiEnqueueResponse = JsonConvert.DeserializeObject<ApiEnqueueResponse>(responseBody);
-
-                    if (apiEnqueueResponse == null) return;
-
-                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard($"Info", $"Enqueued \"{apiEnqueueResponse.IsAdded}\".", ButtonEnum.Ok, Icon.Success, WindowStartupLocation.CenterOwner);
+                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Info", $"Enqueued \"{Path.GetFileName(filePath)}\".", ButtonEnum.Ok, Icon.Success, WindowStartupLocation.CenterOwner);
                     ButtonResult result = await box.ShowAsync();
                 }
                 else
                 {
-                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard($"Error", $"Failed to enqueue.", ButtonEnum.Ok, Icon.Error, WindowStartupLocation.CenterOwner);
-                    ButtonResult result = await box.ShowAsync();
-
 #if DEBUG
-                    Label responseLabel = new Label()
+                    Label responseLabel = new Label
                     {
-                        Content = statusResponse
+                        Content = $"Status: {statusResponse.StatusCode}\nReason: {statusResponse.ReasonPhrase}\nContent: {responseBody}"
                     };
                     this.Content = responseLabel;
 #endif
+
+                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Error", $"Failed to enqueue: {statusResponse.ReasonPhrase}", ButtonEnum.Ok, Icon.Error, WindowStartupLocation.CenterOwner);
+                    ButtonResult result = await box.ShowAsync();
                 }
             }
-            catch (HttpRequestException e)
+            catch (Exception e)
             {
 #if DEBUG
-                Label responseLabel = new Label()
+                Label responseLabel = new Label
                 {
                     Content = e.Message
                 };
                 this.Content = responseLabel;
 #endif
             }
-            catch (IOException ioEx)
-            {
-                // Handle file IO exceptions
-#if DEBUG
-                Label responseLabel = new Label()
-                {
-                    Content = ioEx.Message
-                };
-                this.Content = responseLabel;
-#endif
-            }
         }
-
-
-
 
         private async Task SaveFileUsingStorageProvider(byte[] fileData, string fileName)
         {
             TopLevel? topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null) return;
 
             IStorageFile? fileResult = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 SuggestedFileName = fileName,
-                Title = "Save File",
+                Title = "Save Result",
                 FileTypeChoices = new List<FilePickerFileType> {
                     new FilePickerFileType("ZIP files") { Patterns = new[] { "*.zip" } },
                     new FilePickerFileType("All files") { Patterns = new[] { "*" } }
@@ -342,8 +348,7 @@ namespace RNOClient.Views
             ButtonResult result = await box.ShowAsync();
             if (result == ButtonResult.Yes)
             {
-                RenderAPIDeleteRequest(task);
-                await Task.Delay(1000);
+                await RenderAPIDeleteRequest(task);
                 RenderAPIInfoRequest();
             }
         }
@@ -353,14 +358,21 @@ namespace RNOClient.Views
             throw new NotImplementedException();
         }
 
-        public void DownloadTask(ApiTaskInfo task)
+        public async void DownloadTask(ApiTaskInfo task)
         {
-            RenderAPIDownloadRequest(task);
+            await RenderAPIDownloadRequest(task);
         }
 
-        public void EnqueueTask(ApiEnqueueRequest task, String filePath)
+        public async void EnqueueTask(ApiEnqueueRequest task, String filePath)
         {
-            RenderAPIEnqueueRequest(task, filePath);
+            await RenderAPIEnqueueRequest(task, filePath);
+            RenderAPIInfoRequest();
+        }
+
+        public void ReturnFromUploadDialog()
+        {
+            TasksViewer.IsVisible = true;
+            UploadViewer.IsVisible = false;
         }
     }
 }

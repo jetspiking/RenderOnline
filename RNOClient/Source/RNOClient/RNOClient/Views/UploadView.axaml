@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="RNOClient.Views.UploadView"
+			 Foreground="#888821">
+	<DockPanel Margin="10,10,10,10">
+		<StackPanel Orientation="Vertical">
+			<StackPanel Orientation="Vertical">
+				<Label Name="EngineLabel" Content="Engine Index: " FontWeight="Bold" VerticalAlignment="Center"/>
+				<ComboBox Name="EngineBox" SelectedIndex="0">
+					<!--Will match with database index-->
+					<ComboBoxItem>Blender 4.2 LTS</ComboBoxItem>
+					<!--<ComboBoxItem>Blender 3.6 LTS</ComboBoxItem>
+					<ComboBoxItem>Blender 3.3 LTS</ComboBoxItem>
+					<ComboBoxItem>Blender 2.93 LTS</ComboBoxItem>-->
+				</ComboBox>
+			</StackPanel>
+			<StackPanel Orientation="Vertical">
+				<Label Name="StartFrameLabel" Content="Frame Start: " FontWeight="Bold" VerticalAlignment="Center"/>
+				<TextBox Name="StartFrameBox" Text="1" VerticalAlignment="Center"/>
+			</StackPanel>
+			<StackPanel Orientation="Vertical">
+				<Label Name="EndFrameLabel" Content="Frame End: " FontWeight="Bold" VerticalAlignment="Center"/>
+				<TextBox Name="EndFrameBox" Text="1" VerticalAlignment="Center"/>
+			</StackPanel>
+			<StackPanel Orientation="Vertical">
+				<Label Name="OutputFrameLabel" Content="Output Format: " FontWeight="Bold" VerticalAlignment="Center"/>
+				<ComboBox Name="OutputFrameBox" SelectedIndex="0">
+					<ComboBoxItem>PNG</ComboBoxItem>
+					<ComboBoxItem>JPEG</ComboBoxItem>
+					<ComboBoxItem>BMP</ComboBoxItem>
+					<ComboBoxItem>HDR</ComboBoxItem>
+					<ComboBoxItem>TIFF</ComboBoxItem>
+					<ComboBoxItem>IRIS</ComboBoxItem>
+					<ComboBoxItem>RAWTGA</ComboBoxItem>
+					<ComboBoxItem>TGA</ComboBoxItem>
+					<ComboBoxItem>AVIJPEG</ComboBoxItem>
+					<ComboBoxItem>AVIRAW</ComboBoxItem>
+				</ComboBox>
+			</StackPanel>
+			<StackPanel Orientation="Vertical">
+				<Label Name="ProjectLabel" Content="Project: " FontWeight="Bold" VerticalAlignment="Center" />
+				<Button Name="BrowseButton" Content="Browse" />
+				<TextBox Name="ProjectBox" IsReadOnly="True" Margin="0,5,0,0" />
+			</StackPanel>
+			<Separator HorizontalAlignment="Stretch" Margin="0,15,0,5"/>
+			<StackPanel Orientation="Horizontal" Margin="5,5,5,5">
+				<Button Name="UploadButton" Margin="0,0,15,0">Upload</Button>
+				<Button Name="CancelButton">Cancel</Button>
+			</StackPanel>
+		</StackPanel>
+	</DockPanel>
+</UserControl>

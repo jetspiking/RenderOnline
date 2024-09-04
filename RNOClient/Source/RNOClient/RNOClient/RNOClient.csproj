@@ -27,4 +27,8 @@
   <ItemGroup>
     <Folder Include="Misc\" />
   </ItemGroup>
+
+  <ItemGroup>
+    <UpToDateCheckInput Remove="Views\UploadView.axaml" />
+  </ItemGroup>
 </Project>

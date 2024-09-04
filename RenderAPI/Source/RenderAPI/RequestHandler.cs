@@ -118,45 +118,47 @@ namespace RenderAPI
             }
 
             String query = @"
-                        SELECT 
-                            u.user_id,
-                            u.first_name,
-                            u.last_name,
-                            u.email,
-                            u.subscription_id,
-                            u.is_active,
-                            u.token
-                        FROM 
-                            users u 
-                        WHERE 
-                            u.email = @Email AND token = @Token AND u.is_active = 1";
+                SELECT 
+                    u.user_id,
+                    u.first_name,
+                    u.last_name,
+                    u.email,
+                    u.subscription_id,
+                    u.is_active,
+                    u.token
+                FROM 
+                    users u 
+                WHERE 
+                    u.email = @Email AND token = @Token AND u.is_active = 1";
 
-            MySqlCommand command = new MySqlCommand(query, this._databaseMySqlConnection);
-            command.Parameters.AddWithValue("@Email", emailHeader);
-            command.Parameters.AddWithValue("@Token", tokenHeader);
-
-            MySqlDataReader reader = command.ExecuteReader();
-
-            DbUser? dbUser = null;
-
-            if (reader.Read())
+            using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
-                UInt16 userId = reader.GetUInt16("user_id");
-                String firstName = reader.GetString("first_name");
-                String lastName = reader.GetString("last_name");
-                String email = reader.GetString("email");
-                Byte subscriptionId = reader.GetByte("subscription_id");
-                Boolean isActive = reader.GetBoolean("is_active");
-                String token = reader.GetString("token");
+                connection.Open();
+                using (MySqlCommand command = new MySqlCommand(query, connection))
+                {
+                    command.Parameters.AddWithValue("@Email", emailHeader);
+                    command.Parameters.AddWithValue("@Token", tokenHeader);
 
-                dbUser = new DbUser(userId, firstName, lastName, email, subscriptionId, isActive, token);
+                    using (MySqlDataReader reader = command.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            UInt16 userId = reader.GetUInt16("user_id");
+                            String firstName = reader.GetString("first_name");
+                            String lastName = reader.GetString("last_name");
+                            String email = reader.GetString("email");
+                            Byte subscriptionId = reader.GetByte("subscription_id");
+                            Boolean isActive = reader.GetBoolean("is_active");
+                            String token = reader.GetString("token");
+
+                            DbUser dbUser = new DbUser(userId, firstName, lastName, email, subscriptionId, isActive, token);
+                            return new ApiUser(dbUser.UserId, dbUser.FirstName, dbUser.LastName, dbUser.Email, dbUser.SubscriptionId, dbUser.IsActive);
+                        }
+                    }
+                }
             }
 
-            reader.Close();
-
-            if (dbUser == null) return null;
-
-            return new ApiUser(dbUser.UserId, dbUser.FirstName, dbUser.LastName, dbUser.Email, dbUser.SubscriptionId, dbUser.IsActive);
+            return null;
         }
 
         public async Task HandleInfoRequest(HttpContext httpContext)
@@ -171,93 +173,94 @@ namespace RenderAPI
             }
 
             String retrieveTaskQuery = @"
-                        SELECT 
-                            t.task_id, 
-                            t.user_id,
-                            t.queue_time,
-                            t.start_time, 
-                            t.end_time, 
-                            t.is_running, 
-                            t.is_success,
-                            t.render_id,
-                            t.machine_id,
-                            r.render_id,
-                            r.file_name,
-                            r.file_path,
-                            r.file_size,
-                            r.arguments,
-                            r.engine_id,
-                            e.engine_id,
-                            e.name,
-                            e.extension,
-                            e.download_path,
-                            e.render_argument
-                        FROM 
-                            tasks t
-                        LEFT OUTER JOIN 
-                            queue q ON t.task_id = q.task_id
-                        LEFT OUTER JOIN 
-                            renders r ON t.render_id = r.render_id
-                        LEFT OUTER JOIN
-                            engines e ON r.engine_id = e.engine_id
-                        WHERE 
-                            t.user_id = @UserId
-                        ORDER BY t.task_id DESC
-                        LIMIT 15";
+                SELECT 
+                    t.task_id, 
+                    t.user_id,
+                    t.queue_time,
+                    t.start_time, 
+                    t.end_time, 
+                    t.is_running, 
+                    t.is_success,
+                    t.render_id,
+                    t.machine_id,
+                    r.render_id,
+                    r.file_name,
+                    r.file_path,
+                    r.file_size,
+                    r.arguments,
+                    r.engine_id,
+                    e.engine_id,
+                    e.name,
+                    e.extension,
+                    e.download_path,
+                    e.render_argument
+                FROM 
+                    tasks t
+                LEFT OUTER JOIN 
+                    queue q ON t.task_id = q.task_id
+                LEFT OUTER JOIN 
+                    renders r ON t.render_id = r.render_id
+                LEFT OUTER JOIN
+                    engines e ON r.engine_id = e.engine_id
+                WHERE 
+                    t.user_id = @UserId
+                ORDER BY t.task_id DESC
+                LIMIT 15";
 
-            MySqlCommand command = new MySqlCommand(retrieveTaskQuery, this._databaseMySqlConnection);
-            command.Parameters.AddWithValue("@UserId", user.UserId);
-
-            MySqlDataReader reader = command.ExecuteReader();
-
-            List<ApiTaskInfo> tasks = new();
-
-            while (reader.Read())
+            using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
-                // Read task details
-                UInt64 taskId = reader.GetUInt64("task_id");
-                UInt16 userId = reader.GetUInt16("user_id");
-                DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
-                DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
-                DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
-                Boolean isRunning = reader.GetBoolean("is_running");
-                Boolean isSuccess = reader.GetBoolean("is_success");
-                UInt64 renderId = reader.GetUInt64("render_id");
-                Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
+                connection.Open();
+                using (MySqlCommand command = new MySqlCommand(retrieveTaskQuery, connection))
+                {
+                    command.Parameters.AddWithValue("@UserId", user.UserId);
+                    using (MySqlDataReader reader = command.ExecuteReader())
+                    {
+                        List<ApiTaskInfo> tasks = new();
 
-                DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
+                        while (reader.Read())
+                        {
+                            UInt64 taskId = reader.GetUInt64("task_id");
+                            UInt16 userId = reader.GetUInt16("user_id");
+                            DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
+                            DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
+                            DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
+                            Boolean isRunning = reader.GetBoolean("is_running");
+                            Boolean isSuccess = reader.GetBoolean("is_success");
+                            UInt64 renderId = reader.GetUInt64("render_id");
+                            Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
 
-                // Read render details
-                String fileName = reader.GetString("file_name");
-                String filePath = reader.GetString("file_path");
-                UInt64 fileSize = reader.GetUInt64("file_size");
-                String arguments = reader.GetString("arguments");
-                Byte engineId = reader.GetByte("engine_id");
+                            DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
 
-                DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
+                            String fileName = reader.GetString("file_name");
+                            String filePath = reader.GetString("file_path");
+                            UInt64 fileSize = reader.GetUInt64("file_size");
+                            String arguments = reader.GetString("arguments");
+                            Byte engineId = reader.GetByte("engine_id");
 
-                // Read engine details
-                String engineName = reader.GetString("name");
-                String extension = reader.GetString("extension");
-                String downloadPath = reader.GetString("download_path");
-                String renderArgument = reader.GetString("render_argument");
+                            DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
 
-                DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
+                            String engineName = reader.GetString("name");
+                            String extension = reader.GetString("extension");
+                            String downloadPath = reader.GetString("download_path");
+                            String renderArgument = reader.GetString("render_argument");
 
-                ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, String.Empty, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
-                ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
+                            DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
 
-                tasks.Add(new ApiTaskInfo(apiTask, apiRender, apiEngine));
+                            ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
+                            ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, String.Empty, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+                            ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
+
+                            tasks.Add(new ApiTaskInfo(apiTask, apiRender, apiEngine));
+                        }
+
+                        ApiInfoResponse infoResponse = new(user, tasks);
+                        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+                        await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(infoResponse));
+                    }
+                }
             }
-
-            reader.Close();
-
-            ApiInfoResponse infoResponse = new(user, tasks);
-
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(infoResponse));
         }
+
 
         public async Task HandleEnqueueRequest(HttpContext httpContext)
         {
@@ -306,29 +309,32 @@ namespace RenderAPI
 
             IFormFile uploadedFile = uploadedFiles[0];
 
-
-            // Retrieve the subscription queue limit
-            String retrieveSubscriptionQuery = @"
-                        SELECT 
-                            s.queue_limit
-                        FROM 
-                            subscriptions s
-                        WHERE 
-                            s.subscription_id = @SubscriptionId";
-
-            MySqlCommand retrieveSubscriptionCommand = new MySqlCommand(retrieveSubscriptionQuery, this._databaseMySqlConnection);
-            retrieveSubscriptionCommand.Parameters.AddWithValue("@SubscriptionId", user.SubscriptionId);
-
-            Byte queueLimit = 0;
-            MySqlDataReader reader = retrieveSubscriptionCommand.ExecuteReader();
-            if (reader.Read())
+            using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
-                queueLimit = reader.GetByte("queue_limit");
-            }
-            reader.Close();
+                connection.Open();
 
-            // Check the current number of queued tasks for the user
-            String countQueuedTasksQuery = @"
+                String retrieveSubscriptionQuery = @"
+                    SELECT 
+                        s.queue_limit
+                    FROM 
+                        subscriptions s
+                    WHERE 
+                        s.subscription_id = @SubscriptionId";
+
+                using (MySqlCommand retrieveSubscriptionCommand = new MySqlCommand(retrieveSubscriptionQuery, connection))
+                {
+                    retrieveSubscriptionCommand.Parameters.AddWithValue("@SubscriptionId", user.SubscriptionId);
+                    Byte queueLimit = 0;
+
+                    using (MySqlDataReader reader = retrieveSubscriptionCommand.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            queueLimit = reader.GetByte("queue_limit");
+                        }
+                    }
+
+                    String countQueuedTasksQuery = @"
                         SELECT 
                             COUNT(*) 
                         FROM 
@@ -338,20 +344,20 @@ namespace RenderAPI
                         WHERE 
                             t.user_id = @UserId";
 
-            MySqlCommand countQueuedTasksCommand = new MySqlCommand(countQueuedTasksQuery, this._databaseMySqlConnection);
-            countQueuedTasksCommand.Parameters.AddWithValue("@UserId", user.UserId);
+                    using (MySqlCommand countQueuedTasksCommand = new MySqlCommand(countQueuedTasksQuery, connection))
+                    {
+                        countQueuedTasksCommand.Parameters.AddWithValue("@UserId", user.UserId);
+                        UInt64 currentQueuedTasks = Convert.ToUInt64(countQueuedTasksCommand.ExecuteScalar());
 
-            UInt64 currentQueuedTasks = Convert.ToUInt64(countQueuedTasksCommand.ExecuteScalar());
+                        if (currentQueuedTasks >= queueLimit)
+                        {
+                            httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Queue limit {queueLimit} reached for your subscription.")));
+                            return;
+                        }
+                    }
 
-            // Compare against the queue limit
-            if (currentQueuedTasks >= queueLimit)
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Queue limit {queueLimit} reached for your subscription.")));
-                return;
-            }
-
-            String retrieveEngineQuery = @"
+                    String retrieveEngineQuery = @"
                         SELECT 
                             e.engine_id,
                             e.name,
@@ -363,187 +369,188 @@ namespace RenderAPI
                         WHERE 
                             e.engine_id = @EngineId";
 
-            MySqlCommand retrieveEngineCommand = new MySqlCommand(retrieveEngineQuery, this._databaseMySqlConnection);
-            retrieveEngineCommand.Parameters.AddWithValue("@EngineId", enqueueRequest.EngineId);
-
-            reader = retrieveEngineCommand.ExecuteReader();
-
-            ApiEngine? engine = null;
-
-            if (reader.Read())
-            {
-                Byte engineId = reader.GetByte("engine_id");
-                String name = reader.GetString("name");
-                String extension = reader.GetString("extension");
-                String downloadPath = reader.GetString("download_path");
-                String renderArgument = reader.GetString("render_argument");
-
-                engine = new(engineId, name, extension, downloadPath, renderArgument);
-            }
-
-            reader.Close();
-
-            if (engine == null)
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Engine with identifier {enqueueRequest.EngineId} not found.")));
-                return;
-            }
-
-            if (engine.Extension != Path.GetExtension(uploadedFile.FileName))
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Engine extension {engine.Extension} not matching with files extension {Path.GetExtension(uploadedFile.FileName)}.")));
-                return;
-            }
-            DateTime queueTime = DateTime.Now;
-            String directory = Path.Combine(engine.DownloadPath, user.UserId.ToString(), queueTime.Ticks.ToString());
-            if (!Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
-
-            String filePath = Path.Combine(directory, uploadedFile.FileName);
-            await uploadedFile.CopyToAsync(new FileStream(filePath, FileMode.OpenOrCreate));
-
-            UInt64 fileSize = (UInt64)uploadedFile.Length;
-            String fileArguments = engine.RenderArgument;
-
-            foreach (ApiArgType argumentType in enqueueRequest.Arguments)
-            {
-                String retrieveArgType = @"
-                        SELECT 
-                            a.argtype_id,
-                            a.type,
-                            a.regex
-                        FROM 
-                            argtypes a
-                        WHERE 
-                            a.argtype_id = @ArgTypeId";
-
-                MySqlCommand argTypeCommand = new MySqlCommand(retrieveArgType, this._databaseMySqlConnection);
-                argTypeCommand.Parameters.AddWithValue("@ArgTypeId", argumentType.ArgTypeId);
-
-                reader = argTypeCommand.ExecuteReader();
-
-                DbArgType? argType = null;
-
-                if (reader.Read())
-                {
-                    String argTypeId = reader.GetString("argtype_id");
-                    String type = reader.GetString("type");
-                    String? regex = reader.GetString("regex");
-
-                    argType = new DbArgType(argTypeId, type, regex);
-                }
-
-                reader.Close();
-
-                if (argType == null)
-                {
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Argument type identifier {argumentType.ArgTypeId} must be present in database.")));
-                    return;
-                }
-
-                Boolean isValueAllowed = false;
-
-                if (String.IsNullOrEmpty(argType.Regex))
-                    switch (argType.Type)
+                    using (MySqlCommand retrieveEngineCommand = new MySqlCommand(retrieveEngineQuery, connection))
                     {
-                        default:
+                        retrieveEngineCommand.Parameters.AddWithValue("@EngineId", enqueueRequest.EngineId);
+
+                        ApiEngine? engine = null;
+
+                        using (MySqlDataReader reader = retrieveEngineCommand.ExecuteReader())
+                        {
+                            if (reader.Read())
                             {
-                                httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
-                                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Type {argType.Type} is not valid for RenderOnline.")));
-                                return;
+                                Byte engineId = reader.GetByte("engine_id");
+                                String name = reader.GetString("name");
+                                String extension = reader.GetString("extension");
+                                String downloadPath = reader.GetString("download_path");
+                                String renderArgument = reader.GetString("render_argument");
+
+                                engine = new(engineId, name, extension, downloadPath, renderArgument);
                             }
-                        case "file":
-                            // Allow only safe filenames (alphanumeric, underscore, hyphen, dot)
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9_\-]+\.[a-zA-Z0-9]{1,4}$");
-                            break;
-                        case "path":
-                            // Only allow absolute paths without any special shell characters
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^(/[a-zA-Z0-9_\-]+)+/?$");
-                            break;
-                        case "extension":
-                            // File extensions: 1 to 4 alphabetic characters
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\.[a-zA-Z0-9]{1,4}$");
-                            break;
-                        case "word":
-                            // Single alphanumeric word
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\w+$");
-                            break;
-                        case "sentence":
-                            // Allow sentences but restrict special characters; avoid injection-prone ones
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9\s,.!?'-]+$");
-                            break;
-                        case "natural":
-                            // Positive integers only
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\d+$");
-                            break;
-                        case "integer":
-                            // Allow negative and positive integers
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+$");
-                            break;
-                        case "real":
-                            // Allow positive/negative floats and integers
-                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+(\.\d+)?$");
-                            break;
+                        }
+
+                        if (engine == null)
+                        {
+                            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Engine with identifier {enqueueRequest.EngineId} not found.")));
+                            return;
+                        }
+
+                        if (engine.Extension != Path.GetExtension(uploadedFile.FileName))
+                        {
+                            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Engine extension {engine.Extension} not matching with files extension {Path.GetExtension(uploadedFile.FileName)}.")));
+                            return;
+                        }
+
+                        DateTime queueTime = DateTime.Now;
+                        String directory = Path.Combine(engine.DownloadPath, user.UserId.ToString(), queueTime.Ticks.ToString());
+                        if (!Directory.Exists(directory))
+                            Directory.CreateDirectory(directory);
+
+                        String filePath = Path.Combine(directory, uploadedFile.FileName);
+                        await uploadedFile.CopyToAsync(new FileStream(filePath, FileMode.OpenOrCreate));
+
+                        UInt64 fileSize = (UInt64)uploadedFile.Length;
+                        String fileArguments = engine.RenderArgument;
+
+                        foreach (ApiArgType argumentType in enqueueRequest.Arguments)
+                        {
+                            String retrieveArgType = @"
+                            SELECT 
+                                a.argtype_id,
+                                a.type,
+                                a.regex
+                            FROM 
+                                argtypes a
+                            WHERE 
+                                a.argtype_id = @ArgTypeId";
+
+                            using (MySqlCommand argTypeCommand = new MySqlCommand(retrieveArgType, connection))
+                            {
+                                argTypeCommand.Parameters.AddWithValue("@ArgTypeId", argumentType.ArgTypeId);
+
+                                DbArgType? argType = null;
+
+                                using (MySqlDataReader reader = argTypeCommand.ExecuteReader())
+                                {
+                                    if (reader.Read())
+                                    {
+                                        String argTypeId = reader.GetString("argtype_id");
+                                        String type = reader.GetString("type");
+                                        String? regex = reader.GetString("regex");
+
+                                        argType = new DbArgType(argTypeId, type, regex);
+                                    }
+                                }
+
+                                if (argType == null)
+                                {
+                                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Argument type identifier {argumentType.ArgTypeId} must be present in database.")));
+                                    return;
+                                }
+
+                                Boolean isValueAllowed = false;
+
+                                if (String.IsNullOrEmpty(argType.Regex))
+                                    switch (argType.Type)
+                                    {
+                                        default:
+                                            {
+                                                httpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                                                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Type {argType.Type} is not valid for RenderOnline.")));
+                                                return;
+                                            }
+                                        case "file":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9_\-]+\.[a-zA-Z0-9]{1,4}$");
+                                            break;
+                                        case "path":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^(/[a-zA-Z0-9_\-]+)+/?$");
+                                            break;
+                                        case "extension":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\.[a-zA-Z0-9]{1,4}$");
+                                            break;
+                                        case "word":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\w+$");
+                                            break;
+                                        case "sentence":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^[a-zA-Z0-9\s,.!?'-]+$");
+                                            break;
+                                        case "natural":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^\d+$");
+                                            break;
+                                        case "integer":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+$");
+                                            break;
+                                        case "real":
+                                            isValueAllowed = Regex.IsMatch(argumentType.Value, @"^-?\d+(\.\d+)?$");
+                                            break;
+                                    }
+                                else if (argType.Regex != null) isValueAllowed = Regex.IsMatch(argumentType.Value, argumentType.Regex);
+
+                                if (!isValueAllowed)
+                                {
+                                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Value {argumentType.Value} must be of type {argType.Type}.")));
+                                    return;
+                                }
+
+                                fileArguments = fileArguments.Replace($"$RENDERONLINE:{argumentType.ArgTypeId}", argumentType.Value);
+                            }
+                        }
+
+                        fileArguments = fileArguments.Replace("$RENDERONLINE:@uploaded_file", filePath);
+
+                        String addRenderQuery = @"
+                            INSERT INTO renders (file_name, file_path, file_size, arguments, engine_id) 
+                            VALUES (@FileName, @FilePath, @FileSize, @Arguments, @EngineId);
+                            SELECT LAST_INSERT_ID();";
+
+                        using (MySqlCommand addRenderCommand = new MySqlCommand(addRenderQuery, connection))
+                        {
+                            addRenderCommand.Parameters.AddWithValue("@FileName", uploadedFile.FileName);
+                            addRenderCommand.Parameters.AddWithValue("@FilePath", filePath);
+                            addRenderCommand.Parameters.AddWithValue("@FileSize", fileSize);
+                            addRenderCommand.Parameters.AddWithValue("@Arguments", fileArguments);
+                            addRenderCommand.Parameters.AddWithValue("@EngineId", engine.EngineId);
+
+                            UInt64 renderId = Convert.ToUInt64(addRenderCommand.ExecuteScalar());
+
+                            String addTaskQuery = @"
+                            INSERT INTO tasks (user_id, queue_time, start_time, end_time, is_running, is_success, render_id, machine_id) 
+                            VALUES (@UserId, @QueueTime, NULL, NULL, @IsRunning, @IsSuccess, @RenderId, NULL);
+                            SELECT LAST_INSERT_ID();";
+
+                            using (MySqlCommand addTaskCommand = new MySqlCommand(addTaskQuery, connection))
+                            {
+                                addTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
+                                addTaskCommand.Parameters.AddWithValue("@QueueTime", queueTime);
+                                addTaskCommand.Parameters.AddWithValue("@IsRunning", false);
+                                addTaskCommand.Parameters.AddWithValue("@IsSuccess", false);
+                                addTaskCommand.Parameters.AddWithValue("@RenderId", renderId);
+
+                                UInt64 taskId = Convert.ToUInt64(addTaskCommand.ExecuteScalar());
+
+                                String addQueueQuery = @"
+                                INSERT INTO queue (task_id) 
+                                VALUES (@TaskId);";
+
+                                using (MySqlCommand addQueueCommand = new MySqlCommand(addQueueQuery, connection))
+                                {
+                                    addQueueCommand.Parameters.AddWithValue("@TaskId", taskId);
+                                    addQueueCommand.ExecuteNonQuery();
+                                }
+                            }
+                        }
+
+                        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+                        await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(true, "Task successfully enqueued.")));
                     }
-                else if (argType.Regex != null) isValueAllowed = Regex.IsMatch(argumentType.Value, argumentType.Regex);
-
-                if (!isValueAllowed)
-                {
-                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(false, $"Value {argumentType.Value} must be of type {argType.Type}.")));
-                    return;
                 }
-
-                fileArguments = fileArguments.Replace($"$RENDERONLINE:{argumentType.ArgTypeId}", argumentType.Value);
             }
-
-            fileArguments = fileArguments.Replace("$RENDERONLINE:@uploaded_file", filePath);
-
-            String addRenderQuery = @"
-                        INSERT INTO renders (file_name, file_path, file_size, arguments, engine_id) 
-                        VALUES (@FileName, @FilePath, @FileSize, @Arguments, @EngineId);
-                        SELECT LAST_INSERT_ID();";
-
-            MySqlCommand addRenderCommand = new MySqlCommand(addRenderQuery, this._databaseMySqlConnection);
-            addRenderCommand.Parameters.AddWithValue("@FileName", uploadedFile.FileName);
-            addRenderCommand.Parameters.AddWithValue("@FilePath", filePath);
-            addRenderCommand.Parameters.AddWithValue("@FileSize", fileSize);
-            addRenderCommand.Parameters.AddWithValue("@Arguments", fileArguments);
-            addRenderCommand.Parameters.AddWithValue("@EngineId", engine.EngineId);
-
-            UInt64 renderId = Convert.ToUInt64(addRenderCommand.ExecuteScalar());
-
-            String addTaskQuery = @"
-                        INSERT INTO tasks (user_id, queue_time, start_time, end_time, is_running, is_success, render_id, machine_id) 
-                        VALUES (@UserId, @QueueTime, NULL, NULL, @IsRunning, @IsSuccess, @RenderId, NULL);
-                        SELECT LAST_INSERT_ID();";
-
-            MySqlCommand addTaskCommand = new MySqlCommand(addTaskQuery, this._databaseMySqlConnection);
-            addTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
-            addTaskCommand.Parameters.AddWithValue("@QueueTime", queueTime);
-            addTaskCommand.Parameters.AddWithValue("@IsRunning", false);
-            addTaskCommand.Parameters.AddWithValue("@IsSuccess", false);
-            addTaskCommand.Parameters.AddWithValue("@RenderId", renderId);
-
-            UInt64 taskId = Convert.ToUInt64(addTaskCommand.ExecuteScalar());
-
-
-            String addQueueQuery = @"
-                        INSERT INTO queue (task_id) 
-                        VALUES (@TaskId);";
-
-            MySqlCommand addQueueCommand = new MySqlCommand(addQueueQuery, this._databaseMySqlConnection);
-            addQueueCommand.Parameters.AddWithValue("@TaskId", taskId);
-
-            // Execute queue insertion
-            addQueueCommand.ExecuteNonQuery();
-
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiEnqueueResponse(true, "Task successfully enqueued.")));
         }
+
 
         public async Task HandleDequeueRequest(HttpContext httpContext)
         {
@@ -572,178 +579,185 @@ namespace RenderAPI
                 return;
             }
 
-            String checkTaskQuery = @"
-                SELECT 
-                    t.task_id 
-                FROM 
-                    tasks t 
-                WHERE 
-                    t.task_id = @TaskId AND t.user_id = @UserId";
-
-            MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, this._databaseMySqlConnection);
-            checkTaskCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
-            checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
-
-            MySqlDataReader reader = checkTaskCommand.ExecuteReader();
-
-            if (!reader.Read())
+            using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
-                reader.Close();
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {dequeueRequest.TaskId} not found for the current user.")));
-                return;
-            }
+                connection.Open();
 
-            reader.Close();
+                String checkTaskQuery = @"
+            SELECT 
+                t.task_id 
+            FROM 
+                tasks t 
+            WHERE 
+                t.task_id = @TaskId AND t.user_id = @UserId";
 
-            // Check if the task is in the queue
-            String checkQueueQuery = @"
-                SELECT 
-                    q.queue_id 
-                FROM 
-                    queue q 
-                WHERE 
-                    q.task_id = @TaskId";
-
-            MySqlCommand checkQueueCommand = new MySqlCommand(checkQueueQuery, this._databaseMySqlConnection);
-            checkQueueCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
-
-            reader = checkQueueCommand.ExecuteReader();
-
-            if (!reader.Read())
-            {
-                reader.Close();
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {dequeueRequest.TaskId} is not in the queue.")));
-                return;
-            }
-
-            reader.Close();
-
-            // Delete the task from the queue
-            String deleteQueueQuery = @"
-                DELETE FROM queue 
-                WHERE task_id = @TaskId";
-
-            MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, this._databaseMySqlConnection);
-            deleteQueueCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
-
-            deleteQueueCommand.ExecuteNonQuery();
-
-            // Updated query to include arguments from the renders table
-            String retrieveFullTaskQuery = @"
-                                SELECT 
-                                    t.task_id, 
-                                    t.user_id,
-                                    t.queue_time,
-                                    t.start_time, 
-                                    t.end_time, 
-                                    t.is_running, 
-                                    t.is_success,
-                                    t.render_id,
-                                    t.machine_id,
-                                    r.render_id,
-                                    r.file_name,
-                                    r.file_path,
-                                    r.file_size,
-                                    r.arguments,
-                                    r.engine_id,
-                                    e.engine_id,
-                                    e.name,
-                                    e.extension,
-                                    e.download_path,
-                                    e.render_argument
-                                FROM 
-                                    tasks t
-                                JOIN 
-                                    renders r ON t.render_id = r.render_id
-                                JOIN
-                                    engines e ON r.engine_id = e.engine_id
-                                WHERE 
-                                    t.task_id = @TaskId";
-
-            ApiTaskInfo? task = null;
-
-            MySqlCommand retrieveFullTaskCommand = new MySqlCommand(retrieveFullTaskQuery, this._databaseMySqlConnection);
-            retrieveFullTaskCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
-
-            reader = retrieveFullTaskCommand.ExecuteReader();
-
-            if (reader.Read())
-            {
-                // Read task details
-                UInt64 taskId = reader.GetUInt64("task_id");
-                UInt16 userId = reader.GetUInt16("user_id");
-                DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
-                DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
-                DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
-                Boolean isRunning = reader.GetBoolean("is_running");
-                Boolean isSuccess = reader.GetBoolean("is_success");
-                UInt64 renderId = reader.GetUInt64("render_id");
-                Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
-
-                DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
-
-                // Read render details
-                String fileName = reader.GetString("file_name");
-                String filePath = reader.GetString("file_path");
-                UInt64 fileSize = reader.GetUInt64("file_size");
-                String arguments = reader.GetString("arguments");
-                Byte engineId = reader.GetByte("engine_id");
-
-                DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
-
-                // Read engine details
-                String engineName = reader.GetString("name");
-                String extension = reader.GetString("extension");
-                String downloadPath = reader.GetString("download_path");
-                String renderArgument = reader.GetString("render_argument");
-
-                DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
-
-                ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
-                ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
-
-                task = new ApiTaskInfo(apiTask, apiRender, apiEngine);
-            }
-            reader.Close();
-
-            if (task != null && task.Task.MachineId != null)
-            {
-                String machineQuery = @"
-                        SELECT 
-                            m.machine_id, 
-                            m.ip_address,
-                            m.port 
-                        FROM 
-                            machines m
-                        WHERE m.machine_id = @MachineId";
-
-
-                MySqlCommand machineCommand = new MySqlCommand(machineQuery, this._databaseMySqlConnection);
-                machineCommand.Parameters.AddWithValue("@MachineId", task.Task.MachineId);
-                MySqlDataReader machineReader = machineCommand.ExecuteReader();
-
-                DbMachine? machine = null;
-
-                if (machineReader.Read())
+                using (MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, connection))
                 {
-                    Byte machineId = machineReader.GetByte("machine_id");
-                    String ipAddress = machineReader.GetString("ip_address");
-                    UInt16 port = machineReader.GetUInt16("port");
+                    checkTaskCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
+                    checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
 
-                    machine = new DbMachine(machineId, ipAddress, port);
+                    using (MySqlDataReader reader = checkTaskCommand.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            reader.Close();
+                            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {dequeueRequest.TaskId} not found for the current user.")));
+                            return;
+                        }
+                    }
                 }
-                machineReader.Close();
 
-                if (machine != null)
-                    await StopTaskOnMachine(machine, task);
+                String checkQueueQuery = @"
+            SELECT 
+                q.queue_id 
+            FROM 
+                queue q 
+            WHERE 
+                q.task_id = @TaskId";
+
+                using (MySqlCommand checkQueueCommand = new MySqlCommand(checkQueueQuery, connection))
+                {
+                    checkQueueCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
+
+                    using (MySqlDataReader reader = checkQueueCommand.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            reader.Close();
+                            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(false, $"Task with identifier {dequeueRequest.TaskId} is not in the queue.")));
+                            return;
+                        }
+                    }
+                }
+
+                String deleteQueueQuery = @"
+            DELETE FROM queue 
+            WHERE task_id = @TaskId";
+
+                using (MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, connection))
+                {
+                    deleteQueueCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
+                    deleteQueueCommand.ExecuteNonQuery();
+                }
+
+                String retrieveFullTaskQuery = @"
+            SELECT 
+                t.task_id, 
+                t.user_id,
+                t.queue_time,
+                t.start_time, 
+                t.end_time, 
+                t.is_running, 
+                t.is_success,
+                t.render_id,
+                t.machine_id,
+                r.render_id,
+                r.file_name,
+                r.file_path,
+                r.file_size,
+                r.arguments,
+                r.engine_id,
+                e.engine_id,
+                e.name,
+                e.extension,
+                e.download_path,
+                e.render_argument
+            FROM 
+                tasks t
+            JOIN 
+                renders r ON t.render_id = r.render_id
+            JOIN
+                engines e ON r.engine_id = e.engine_id
+            WHERE 
+                t.task_id = @TaskId";
+
+                ApiTaskInfo? task = null;
+
+                using (MySqlCommand retrieveFullTaskCommand = new MySqlCommand(retrieveFullTaskQuery, connection))
+                {
+                    retrieveFullTaskCommand.Parameters.AddWithValue("@TaskId", dequeueRequest.TaskId);
+
+                    using (MySqlDataReader reader = retrieveFullTaskCommand.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            UInt64 taskId = reader.GetUInt64("task_id");
+                            UInt16 userId = reader.GetUInt16("user_id");
+                            DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
+                            DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
+                            DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
+                            Boolean isRunning = reader.GetBoolean("is_running");
+                            Boolean isSuccess = reader.GetBoolean("is_success");
+                            UInt64 renderId = reader.GetUInt64("render_id");
+                            Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
+
+                            DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
+
+                            String fileName = reader.GetString("file_name");
+                            String filePath = reader.GetString("file_path");
+                            UInt64 fileSize = reader.GetUInt64("file_size");
+                            String arguments = reader.GetString("arguments");
+                            Byte engineId = reader.GetByte("engine_id");
+
+                            DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
+
+                            String engineName = reader.GetString("name");
+                            String extension = reader.GetString("extension");
+                            String downloadPath = reader.GetString("download_path");
+                            String renderArgument = reader.GetString("render_argument");
+
+                            DbEngine dbEngine = new(engineId, engineName, extension, downloadPath, renderArgument);
+
+                            ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
+                            ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+                            ApiEngine apiEngine = new(dbEngine.EngineId, dbEngine.Name, dbEngine.Extension, dbEngine.DownloadPath, dbEngine.RenderArgument);
+
+                            task = new ApiTaskInfo(apiTask, apiRender, apiEngine);
+                        }
+                    }
+                }
+
+                if (task != null && task.Task.MachineId != null)
+                {
+                    String machineQuery = @"
+                SELECT 
+                    m.machine_id, 
+                    m.ip_address,
+                    m.port 
+                FROM 
+                    machines m
+                WHERE m.machine_id = @MachineId";
+
+                    using (MySqlCommand machineCommand = new MySqlCommand(machineQuery, connection))
+                    {
+                        machineCommand.Parameters.AddWithValue("@MachineId", task.Task.MachineId);
+
+                        using (MySqlDataReader machineReader = machineCommand.ExecuteReader())
+                        {
+                            DbMachine? machine = null;
+
+                            if (machineReader.Read())
+                            {
+                                Byte machineId = machineReader.GetByte("machine_id");
+                                String ipAddress = machineReader.GetString("ip_address");
+                                UInt16 port = machineReader.GetUInt16("port");
+
+                                machine = new DbMachine(machineId, ipAddress, port);
+                            }
+
+                            if (machine != null)
+                                await StopTaskOnMachine(machine, task);
+                        }
+                    }
+                }
+
+                httpContext.Response.StatusCode = StatusCodes.Status200OK;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(true, "Task successfully dequeued.")));
             }
-
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDequeueResponse(true, "Task successfully dequeued.")));
         }
+
 
         public async Task HandleDownloadRequest(HttpContext httpContext)
         {
@@ -772,128 +786,159 @@ namespace RenderAPI
                 return;
             }
 
-            String checkTaskQuery = @"
-                SELECT 
-                    t.task_id 
-                FROM 
-                    tasks t 
-                WHERE 
-                    t.task_id = @TaskId AND t.user_id = @UserId";
-
-            MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, this._databaseMySqlConnection);
-            checkTaskCommand.Parameters.AddWithValue("@TaskId", downloadRequest.TaskId);
-            checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
-
-            MySqlDataReader reader = checkTaskCommand.ExecuteReader();
-
-            if (!reader.Read())
+            using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
-                reader.Close();
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found for the current user.")));
-                return;
+                connection.Open();
+
+                String checkTaskQuery = @"
+            SELECT 
+                t.task_id 
+            FROM 
+                tasks t 
+            WHERE 
+                t.task_id = @TaskId AND t.user_id = @UserId";
+
+                using (MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, connection))
+                {
+                    checkTaskCommand.Parameters.AddWithValue("@TaskId", downloadRequest.TaskId);
+                    checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
+
+                    using (MySqlDataReader reader = checkTaskCommand.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            reader.Close();
+                            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found for the current user.")));
+                            return;
+                        }
+                    }
+                }
+
+                String retrieveFullTaskQuery = @"
+            SELECT 
+                t.task_id, 
+                t.user_id,
+                t.queue_time,
+                t.start_time, 
+                t.end_time, 
+                t.is_running, 
+                t.is_success,
+                t.render_id,
+                t.machine_id,
+                r.render_id,
+                r.file_name,
+                r.file_path,
+                r.file_size,
+                r.arguments,
+                r.engine_id
+            FROM
+                tasks t
+            JOIN 
+                renders r ON t.render_id = r.render_id
+            WHERE 
+                t.task_id = @TaskId";
+
+                ApiTaskInfo? task = null;
+
+                using (MySqlCommand retrieveFullTaskCommand = new MySqlCommand(retrieveFullTaskQuery, connection))
+                {
+                    retrieveFullTaskCommand.Parameters.AddWithValue("@TaskId", downloadRequest.TaskId);
+
+                    using (MySqlDataReader reader = retrieveFullTaskCommand.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            UInt64 taskId = reader.GetUInt64("task_id");
+                            UInt16 userId = reader.GetUInt16("user_id");
+                            DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
+                            DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
+                            DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
+                            Boolean isRunning = reader.GetBoolean("is_running");
+                            Boolean isSuccess = reader.GetBoolean("is_success");
+                            UInt64 renderId = reader.GetUInt64("render_id");
+                            Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
+
+                            DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
+
+                            String fileName = reader.GetString("file_name");
+                            String filePath = reader.GetString("file_path");
+                            UInt64 fileSize = reader.GetUInt64("file_size");
+                            String arguments = reader.GetString("arguments");
+                            Byte engineId = reader.GetByte("engine_id");
+
+                            DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
+
+                            ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
+                            ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
+
+                            task = new ApiTaskInfo(apiTask, apiRender, null);
+                        }
+                    }
+                }
+
+                if (task == null)
+                {
+                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
+                    return;
+                }
+
+                String? parentDirectoryPath = task?.Render?.FilePath;
+
+                if (String.IsNullOrEmpty(parentDirectoryPath))
+                {
+                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
+                    return;
+                }
+
+                DirectoryInfo? parentDirectory = Directory.GetParent(parentDirectoryPath);
+
+                if (parentDirectory == null)
+                {
+                    httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
+                    return;
+                }
+
+                String zipFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
+
+                for (UInt32 i = 0; i < 15; i++)
+                {
+                    try
+                    {
+                        ZipFile.CreateFromDirectory(parentDirectory.FullName, zipFilePath);
+                        break;
+                    }
+                    catch (Exception)
+                    {
+                        await Task.Delay(100);
+                    }
+                }
+
+
+                httpContext.Response.StatusCode = StatusCodes.Status200OK;
+                httpContext.Response.ContentType = "application/zip";
+                httpContext.Response.Headers.Append("Content-Disposition", $"attachment; filename={Path.GetFileName(zipFilePath)}");
+
+                await httpContext.Response.SendFileAsync(zipFilePath);
+
+                for (UInt32 i = 0; i < 15; i++)
+                {
+                    try
+                    {
+                        File.Delete(zipFilePath);
+                        break;
+                    }
+                    catch (Exception)
+                    {
+                        await Task.Delay(100);
+                    }
+                }
             }
-            reader.Close();
-
-            // Updated query to include arguments from the renders table
-            String retrieveFullTaskQuery = @"
-                                SELECT 
-                                    t.task_id, 
-                                    t.user_id,
-                                    t.queue_time,
-                                    t.start_time, 
-                                    t.end_time, 
-                                    t.is_running, 
-                                    t.is_success,
-                                    t.render_id,
-                                    t.machine_id,
-                                    r.render_id,
-                                    r.file_name,
-                                    r.file_path,
-                                    r.file_size,
-                                    r.arguments,
-                                    r.engine_id
-                                FROM
-                                    tasks t
-                                JOIN 
-                                    renders r ON t.render_id = r.render_id
-                                WHERE 
-                                    t.task_id = @TaskId";
-
-            ApiTaskInfo? task = null;
-
-            MySqlCommand retrieveFullTaskCommand = new MySqlCommand(retrieveFullTaskQuery, this._databaseMySqlConnection);
-            retrieveFullTaskCommand.Parameters.AddWithValue("@TaskId", downloadRequest.TaskId);
-
-            reader = retrieveFullTaskCommand.ExecuteReader();
-
-            if (reader.Read())
-            {
-                // Read task details
-                UInt64 taskId = reader.GetUInt64("task_id");
-                UInt16 userId = reader.GetUInt16("user_id");
-                DateTime? queueTime = !reader.IsDBNull("queue_time") ? reader.GetDateTime("queue_time") : null;
-                DateTime? startTime = !reader.IsDBNull("start_time") ? reader.GetDateTime("start_time") : null;
-                DateTime? endTime = !reader.IsDBNull("end_time") ? reader.GetDateTime("end_time") : null;
-                Boolean isRunning = reader.GetBoolean("is_running");
-                Boolean isSuccess = reader.GetBoolean("is_success");
-                UInt64 renderId = reader.GetUInt64("render_id");
-                Byte? machineId = !reader.IsDBNull("machine_id") ? reader.GetByte("machine_id") : null;
-
-                DbTask dbTask = new(taskId, userId, queueTime, startTime, endTime, isRunning, isSuccess, renderId, machineId);
-
-                // Read render details
-                String fileName = reader.GetString("file_name");
-                String filePath = reader.GetString("file_path");
-                UInt64 fileSize = reader.GetUInt64("file_size");
-                String arguments = reader.GetString("arguments");
-                Byte engineId = reader.GetByte("engine_id");
-
-                DbRender dbRender = new(renderId, fileName, filePath, fileSize, arguments, engineId);
-
-                ApiTask apiTask = new(dbTask.TaskId, dbTask.UserId, dbTask.QueueTime, dbTask.StartTime, dbTask.EndTime, dbTask.IsRunning, dbTask.IsSuccess, dbTask.RenderId, dbTask.MachineId);
-                ApiRender apiRender = new(dbRender.RenderId, dbRender.FileName, dbRender.FilePath, dbRender.FileSize, dbRender.Arguments, dbRender.EngineId);
-
-                task = new ApiTaskInfo(apiTask, apiRender, null);
-            }
-            reader.Close();
-
-            if (task == null)
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Task with identifier {downloadRequest.TaskId} not found.")));
-                return;
-            }
-
-            String? parentDirectoryPath = task?.Render?.FilePath;
-
-            if (String.IsNullOrEmpty(parentDirectoryPath))
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Filepath error for Task with identifier {downloadRequest.TaskId}.")));
-                return;
-            }
-
-            DirectoryInfo? parentDirectory = Directory.GetParent(parentDirectoryPath);
-
-            if (parentDirectory == null)
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDownloadResponse(false, $"Unable to determine parent directory for Task with identifier {downloadRequest.TaskId}.")));
-                return;
-            }
-
-            String zipFilePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.zip");
-            ZipFile.CreateFromDirectory(parentDirectory.FullName, zipFilePath);
-
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            httpContext.Response.ContentType = "application/zip";
-            httpContext.Response.Headers.Append("Content-Disposition", $"attachment; filename={Path.GetFileName(zipFilePath)}");
-            
-            await httpContext.Response.SendFileAsync(zipFilePath);
-
-            File.Delete(zipFilePath);
         }
+
 
         public async Task HandleDeleteRequest(HttpContext httpContext)
         {
@@ -922,75 +967,95 @@ namespace RenderAPI
                 return;
             }
 
-            // Verify that the task belongs to the user and get render details
-            String checkTaskQuery = @"
-                    SELECT 
-                        t.task_id, 
-                        r.render_id,
-                        r.file_path 
-                    FROM 
-                        tasks t 
-                    JOIN 
-                        renders r ON t.render_id = r.render_id 
-                    WHERE 
-                        t.task_id = @TaskId AND t.user_id = @UserId";
-
-            MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, this._databaseMySqlConnection);
-            checkTaskCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
-            checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
-
-            MySqlDataReader reader = checkTaskCommand.ExecuteReader();
-
-            if (!reader.Read())
+            using (MySqlConnection connection = new MySqlConnection(this._renderApiConfiguration.ConnectionString))
             {
-                reader.Close();
-                httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(false, $"Task with identifier {deleteRequest.TaskId} not found for the current user.")));
-                return;
+                connection.Open();
+
+                String checkTaskQuery = @"
+            SELECT 
+                t.task_id, 
+                r.render_id,
+                r.file_path 
+            FROM 
+                tasks t 
+            JOIN 
+                renders r ON t.render_id = r.render_id 
+            WHERE 
+                t.task_id = @TaskId AND t.user_id = @UserId";
+
+                UInt64 renderId;
+                String filePath;
+
+                using (MySqlCommand checkTaskCommand = new MySqlCommand(checkTaskQuery, connection))
+                {
+                    checkTaskCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
+                    checkTaskCommand.Parameters.AddWithValue("@UserId", user.UserId);
+
+                    using (MySqlDataReader reader = checkTaskCommand.ExecuteReader())
+                    {
+                        if (!reader.Read())
+                        {
+                            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(false, $"Task with identifier {deleteRequest.TaskId} not found for the current user.")));
+                            return;
+                        }
+
+                        renderId = reader.GetUInt64("render_id");
+                        filePath = reader.GetString("file_path");
+                    }
+                }
+
+                String deleteQueueQuery = @"
+            DELETE FROM queue 
+            WHERE task_id = @TaskId";
+
+                using (MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, connection))
+                {
+                    deleteQueueCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
+                    deleteQueueCommand.ExecuteNonQuery();
+                }
+
+                String? parentDirectoryPath = Path.GetDirectoryName(filePath);
+
+                if (parentDirectoryPath != null && Directory.Exists(parentDirectoryPath))
+                {
+                    for (UInt32 i = 0; i < 15; i++)
+                    {
+                        try
+                        {
+                            Directory.Delete(parentDirectoryPath, true);
+                            break;
+                        }
+                        catch (Exception)
+                        {
+                            await Task.Delay(100);
+                        }
+                    }
+                }
+
+                String deleteTaskQuery = @"
+            DELETE FROM tasks 
+            WHERE task_id = @TaskId";
+
+                using (MySqlCommand deleteTaskCommand = new MySqlCommand(deleteTaskQuery, connection))
+                {
+                    deleteTaskCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
+                    deleteTaskCommand.ExecuteNonQuery();
+                }
+
+                String deleteRenderQuery = @"
+            DELETE FROM renders 
+            WHERE render_id = @RenderId";
+
+                using (MySqlCommand deleteRenderCommand = new MySqlCommand(deleteRenderQuery, connection))
+                {
+                    deleteRenderCommand.Parameters.AddWithValue("@RenderId", renderId);
+                    deleteRenderCommand.ExecuteNonQuery();
+                }
+
+                httpContext.Response.StatusCode = StatusCodes.Status200OK;
+                await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(true, "Task and associated render successfully deleted.")));
             }
-
-            // Retrieve the render_id and file path
-            UInt64 renderId = reader.GetUInt64("render_id");
-            String filePath = reader.GetString("file_path");
-            reader.Close();
-
-            // Remove the task from the queue first
-            String deleteQueueQuery = @"
-                    DELETE FROM queue 
-                    WHERE task_id = @TaskId";
-
-            MySqlCommand deleteQueueCommand = new MySqlCommand(deleteQueueQuery, this._databaseMySqlConnection);
-            deleteQueueCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
-            deleteQueueCommand.ExecuteNonQuery();
-
-            // Delete the folder containing the task details
-            String? parentDirectoryPath = Path.GetDirectoryName(filePath);
-
-            if (parentDirectoryPath != null && Directory.Exists(parentDirectoryPath))
-            {
-                Directory.Delete(parentDirectoryPath, true);
-            }
-
-            // Delete the task itself
-            String deleteTaskQuery = @"
-                    DELETE FROM tasks 
-                    WHERE task_id = @TaskId";
-
-            MySqlCommand deleteTaskCommand = new MySqlCommand(deleteTaskQuery, this._databaseMySqlConnection);
-            deleteTaskCommand.Parameters.AddWithValue("@TaskId", deleteRequest.TaskId);
-            deleteTaskCommand.ExecuteNonQuery();
-
-            // Delete the render associated with the task
-            String deleteRenderQuery = @"
-                    DELETE FROM renders 
-                    WHERE render_id = @RenderId";
-
-            MySqlCommand deleteRenderCommand = new MySqlCommand(deleteRenderQuery, this._databaseMySqlConnection);
-            deleteRenderCommand.Parameters.AddWithValue("@RenderId", renderId);
-            deleteRenderCommand.ExecuteNonQuery();
-
-            httpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await httpContext.Response.WriteAsync(JsonConvert.SerializeObject(new ApiDeleteResponse(true, "Task and associated render successfully deleted.")));
         }
 
 
