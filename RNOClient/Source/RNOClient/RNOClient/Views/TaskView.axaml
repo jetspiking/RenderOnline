@@ -11,7 +11,9 @@
 			<Image Name="StatusErrorImage" Source="/Assets/error.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
 			<Image Name="StatusBusyImage" Source="/Assets/clock.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
 
-			<Image Name="DownloadButton" Source="/Assets/download.png" Width="100" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+			<Border Name="DownloadButtonBorder"  Width="40" Height="40" Margin="20,0,20,0" HorizontalAlignment="Center" VerticalAlignment="Center">
+			<Image Name="DownloadButton" Source="/Assets/download.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,1,1,1"/>
+			</Border>
 
 			<Label Name="FileName" Content="Name" Width="350" FontWeight="Bold" VerticalAlignment="Center"/>
 			
@@ -25,7 +27,9 @@
 			
 			<Label Name="StopTime" Content="Stop" Width="175" FontWeight="Bold" VerticalAlignment="Center"/>
 
-			<Image Name="TrashButton" Source="/Assets/delete.png" Width="100" Height="40" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+			<Border Name="TrashButtonBorder" Width="40" Height="40" Margin="0,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" >
+			<Image Name="TrashButton" Source="/Assets/delete.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,1,1,1"/>
+			</Border>
 		</StackPanel>
 	</DockPanel>
 </UserControl>

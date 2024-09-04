@@ -62,6 +62,14 @@ namespace RNOClient.Views
             TasksPanel.Children.Add(labelTaskView);
 
             this.ValidateButton.PointerPressed += (sender, e) => RenderAPIInfoRequest();
+            this.ValidateButton.PointerEntered += (sender, e) =>
+            {
+                this.ValidateButtonBorder.Background = new SolidColorBrush(Colors.LightGray);
+            };
+            this.ValidateButton.PointerExited += (sender, e) =>
+            {
+                this.ValidateButtonBorder.Background = null;
+            };
 
             this.UploadButton.PointerPressed += (sender, e) =>
             {
@@ -69,6 +77,7 @@ namespace RNOClient.Views
                 TasksViewer.IsVisible = false;
                 UploadViewer.IsVisible = true;
             };
+            
         }
 
         private async void RenderAPIInfoRequest()

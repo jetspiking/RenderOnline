@@ -26,7 +26,9 @@
 					<Label Name="TokenLabel" FontWeight="Bold" Content="Token"/>
 					<TextBox Name="TokenBox" Width="275" PasswordChar="*" />
 				</StackPanel>
-				<Image Name="ValidateButton" Source="/Assets/validate.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,0,0,0"/>
+				<Border Name="ValidateButtonBorder" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="15,0,0,0">
+					<Image Name="ValidateButton" Source="/Assets/validate.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,1,1,1"/>
+				</Border>
 			</StackPanel>
 		</DockPanel>
 

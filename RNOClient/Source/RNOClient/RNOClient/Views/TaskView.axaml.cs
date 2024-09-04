@@ -84,5 +84,24 @@ public partial class TaskView : UserControl
         {
             _taskListener.DownloadTask(taskInfo);
         };
+
+        this.DownloadButton.PointerEntered += (sender, e) =>
+        {
+            this.DownloadButtonBorder.Background = new SolidColorBrush(Colors.LightGray);
+        };
+        this.DownloadButton.PointerExited += (sender, e) =>
+        {
+            this.DownloadButtonBorder.Background = null;
+        };
+
+        this.TrashButton.PointerEntered += (sender, e) =>
+        {
+            this.TrashButtonBorder.Background = new SolidColorBrush(Colors.LightGray);
+        };
+        this.TrashButton.PointerExited += (sender, e) =>
+        {
+            this.TrashButtonBorder.Background = null;
+        };
+
     }
 }
