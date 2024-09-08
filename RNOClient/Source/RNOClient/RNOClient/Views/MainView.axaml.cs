@@ -29,8 +29,8 @@ namespace RNOClient.Views
 {
     public partial class MainView : UserControl, ITaskListener, IUIInfluencer
     {
-        private String _ipAddress = "127.0.0.1";
-        private String _port = "5001";
+        private String _ipAddress = "127.0.0.1";    // IP-address or domain.
+        private String? _port = null;               // Port here. If using domain, set to null.
 
         private HttpClientHandler _httpClientHandler;
 
@@ -91,7 +91,11 @@ namespace RNOClient.Views
 
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
             httpClient.DefaultRequestHeaders.Add("token", this.TokenBox.Text);
-            httpClient.BaseAddress = new Uri($"https://{_ipAddress}:{_port}");
+            
+            if (_port == null)
+                httpClient.BaseAddress = new Uri($"https://{_ipAddress}");
+            else 
+                httpClient.BaseAddress = new Uri($"https://{_ipAddress}:{_port}");
 
             try
             {
