@@ -12,7 +12,7 @@
              >
 
 	<DockPanel Name="RootPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="10,10,10,10">
-		<DockPanel Name="GreetPanel" Height="50" DockPanel.Dock="Top" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="10,0,10,0">
+		<DockPanel Name="GreetPanel" Height="50" DockPanel.Dock="Top" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="10,0,20,0">
 			<StackPanel Orientation="Horizontal" HorizontalAlignment="Left" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="10,20,10,0">
 				<Image Name="AppIcon"/>
 				<Label Name="TitleLabel" Content="RenderOnline" FontSize="26" FontWeight="Bold"/>
@@ -32,7 +32,7 @@
 			</StackPanel>
 		</DockPanel>
 
-		<ScrollViewer>
+		<ScrollViewer Name="ContentViewer" IsVisible="False">
 			<DockPanel>
 				<StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="15,25,15,5">
 					<DockPanel Name="UploadPanel" Height="80" HorizontalAlignment="Stretch" VerticalAlignment="Top" >

@@ -32,31 +32,9 @@ namespace RNOClient.Views
         private String _ipAddress = "127.0.0.1";    // IP-address or domain.
         private String? _port = null;               // Port here. If using domain, set to null.
 
-        private HttpClientHandler _httpClientHandler;
-
         public MainView()
         {
             InitializeComponent();
-
-            this._httpClientHandler = new();
-
-#if DEBUG
-            try
-            {
-                this._httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) =>
-                {
-                    return true;
-                };
-            }
-            catch (Exception e)
-            {
-                Label responseLabel = new()
-                {
-                    Content = e.Message
-                };
-                this.Content = responseLabel;
-            }
-#endif
 
             TaskView labelTaskView = new(null, this as ITaskListener);
             TasksPanel.Children.Add(labelTaskView);
@@ -87,7 +65,7 @@ namespace RNOClient.Views
             TaskView labelTaskView = new(null, this as ITaskListener);
             TasksPanel.Children.Add(labelTaskView);
 
-            HttpClient httpClient = new HttpClient(this._httpClientHandler);
+            HttpClient httpClient = new();
 
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
             httpClient.DefaultRequestHeaders.Add("token", this.TokenBox.Text);
@@ -95,7 +73,7 @@ namespace RNOClient.Views
             if (_port == null)
                 httpClient.BaseAddress = new Uri($"https://{_ipAddress}");
             else 
-                httpClient.BaseAddress = new Uri($"https://{_ipAddress}:{_port}");
+                httpClient.BaseAddress = new Uri($"http://{_ipAddress}:{_port}");
 
             try
             {
@@ -120,6 +98,8 @@ namespace RNOClient.Views
 
                     this.TasksCountLabel.Content = apiInfoResponse.Tasks.Count.ToString();
                     this.QueueCountLabel.Content = queueCount.ToString();
+
+                    ContentViewer.IsVisible = true;
                 }
                 else
                 {
@@ -127,14 +107,15 @@ namespace RNOClient.Views
                     {
                         IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard($"Error", $"Invalid credentials.", ButtonEnum.Ok, Icon.Error, WindowStartupLocation.CenterOwner);
                         ButtonResult result = await box.ShowAsync();
+                        ContentViewer.IsVisible = false;
                     }
 
 #if DEBUG
-                    Label responseLabel = new()
+                    Label responseBlock = new()
                     {
                         Content = statusResponse
                     };
-                    this.Content = responseLabel;
+                    this.Content = responseBlock;
 #endif
                 }
             }
@@ -144,18 +125,18 @@ namespace RNOClient.Views
                 ButtonResult result = await box.ShowAsync();
 
 #if DEBUG
-                Label responseLabel = new()
+                Label responseBlock = new()
                 {
                     Content = e.Message
                 };
-                this.Content = responseLabel;
+                this.Content = responseBlock;
 #endif
             }
         }
 
         private async Task RenderAPIDeleteRequest(ApiTaskInfo apiTaskInfo)
         {
-            HttpClient httpClient = new HttpClient(this._httpClientHandler);
+            HttpClient httpClient = new();
 
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
             httpClient.DefaultRequestHeaders.Add("token", this.TokenBox.Text);
@@ -182,29 +163,29 @@ namespace RNOClient.Views
                     ButtonResult result = await box.ShowAsync();
 
 #if DEBUG
-                    Label responseLabel = new()
+                    Label responseBlock = new()
                     {
                         Content = statusResponse
                     };
-                    this.Content = responseLabel;
+                    this.Content = responseBlock;
 #endif
                 }
             }
             catch (HttpRequestException e)
             {
 #if DEBUG
-                Label responseLabel = new()
+                Label responseBlock = new()
                 {
                     Content = e.Message
                 };
-                this.Content = responseLabel;
+                this.Content = responseBlock;
 #endif
             }
         }
 
         private async Task RenderAPIDownloadRequest(ApiTaskInfo apiTaskInfo)
         {
-            HttpClient httpClient = new HttpClient(this._httpClientHandler);
+            HttpClient httpClient = new();
 
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
             httpClient.DefaultRequestHeaders.Add("token", this.TokenBox.Text);
@@ -234,29 +215,29 @@ namespace RNOClient.Views
                     ButtonResult result = await box.ShowAsync();
 
 #if DEBUG
-                    Label responseLabel = new Label
+                    Label responseBlock = new()
                     {
                         Content = statusResponse.ToString()
                     };
-                    this.Content = responseLabel;
+                    this.Content = responseBlock;
 #endif
                 }
             }
             catch (HttpRequestException e)
             {
 #if DEBUG
-                Label responseLabel = new Label
+                Label responseBlock = new()
                 {
                     Content = e.Message
                 };
-                this.Content = responseLabel;
+                this.Content = responseBlock;
 #endif
             }
         }
 
         private async Task RenderAPIEnqueueRequest(ApiEnqueueRequest task, String filePath)
         {
-            HttpClient httpClient = new HttpClient(this._httpClientHandler);
+            HttpClient httpClient = new();
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
             httpClient.DefaultRequestHeaders.Add("token", this.TokenBox.Text);
             httpClient.BaseAddress = new Uri($"https://{_ipAddress}:{_port}");
@@ -307,11 +288,11 @@ namespace RNOClient.Views
                 else
                 {
 #if DEBUG
-                    Label responseLabel = new Label
+                    Label responseBlock = new()
                     {
                         Content = $"Status: {statusResponse.StatusCode}\nReason: {statusResponse.ReasonPhrase}\nContent: {responseBody}"
                     };
-                    this.Content = responseLabel;
+                    this.Content = responseBlock;
 #endif
 
                     IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Error", $"Failed to enqueue: {statusResponse.ReasonPhrase}", ButtonEnum.Ok, Icon.Error, WindowStartupLocation.CenterOwner);
@@ -321,11 +302,11 @@ namespace RNOClient.Views
             catch (Exception e)
             {
 #if DEBUG
-                Label responseLabel = new Label
+                Label responseBlock = new()
                 {
                     Content = e.Message
                 };
-                this.Content = responseLabel;
+                this.Content = responseBlock;
 #endif
             }
         }
