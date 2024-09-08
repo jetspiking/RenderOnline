@@ -32,29 +32,11 @@ namespace RenderAPI
 
         private HttpClientHandler _httpClientHandler;
 
-        public RequestHandler(WebApplication app)
+        public RequestHandler(WebApplication app, Core.Configuration.RenderServer configuration)
         {
-            const String configurationFileName = "RenderAPI.json";
-            String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configurationFileName);
+            this._renderApiConfiguration = configuration;
 
             this._httpClientHandler = new();
-            this._httpClientHandler.ServerCertificateCustomValidationCallback = (message, cert, chain, sslPolicyErrors) =>
-            {
-                return true;
-            };
-
-            Console.WriteLine("Searching for configuration file: " + configurationFilePath);
-
-            Core.Configuration.RenderServer? configuration = JsonManager.DeserializeFromFile<Core.Configuration.RenderServer>(configurationFilePath);
-
-            if (configuration == null)
-            {
-                Console.WriteLine($"{configurationFileName} not found!");
-                Console.ReadKey();
-                Environment.Exit(0);
-            }
-
-            this._renderApiConfiguration = configuration;
 
             if (!InitializeDatabaseConnection())
             {
@@ -63,8 +45,6 @@ namespace RenderAPI
                 Environment.Exit(1);
             }
 
-            app.Urls.Add("https://localhost:" + _renderApiConfiguration.Port);
-            app.UseHttpsRedirection();
             app.UseAuthorization();
 
             // Get machine status.
@@ -441,7 +421,7 @@ namespace RenderAPI
                                     {
                                         String argTypeId = reader.GetString("argtype_id");
                                         String type = reader.GetString("type");
-                                        String? regex = reader.GetString("regex");
+                                        String? regex = !reader.IsDBNull("regex") ? reader.GetString("regex") : null;
 
                                         argType = new DbArgType(argTypeId, type, regex);
                                     }
