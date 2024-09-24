@@ -30,6 +30,16 @@ namespace RenderAPI.Core
 
             WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
             builder.Services.AddAuthorization();
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll",
+                    policyBuilder =>
+                    {
+                        policyBuilder.AllowAnyOrigin()
+                                     .AllowAnyMethod()
+                                     .AllowAnyHeader();
+                    });
+            });
 
             if (configuration.Certificate != null)
             {
@@ -61,6 +71,7 @@ namespace RenderAPI.Core
             }
 
             WebApplication? app = builder.Build();
+            app.UseCors("AllowAll");
 
             RequestHandler requestHandler = new(app, configuration);
         }
