@@ -6,6 +6,7 @@ using RNOClient.Core.Listeners;
 using RNOClient.Core.RenderAPI.Api;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace RNOClient.Views;
 
@@ -14,6 +15,7 @@ public partial class UploadView : UserControl
     private ITaskListener _taskListener;
     private IUIInfluencer _uIInfluencer;
     private String? _selectedPath;
+    private Stream? _fileUploadStream;
 
     public UploadView()
     {
@@ -42,6 +44,7 @@ public partial class UploadView : UserControl
     private async void BrowseForProject()
     {
         TopLevel? topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel.StorageProvider != null) Console.WriteLine("Not null!");
 
         IReadOnlyList<IStorageFile>? files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -51,13 +54,15 @@ public partial class UploadView : UserControl
 
         if (files.Count == 0) return;
 
-        _selectedPath = files[0].Path.AbsolutePath;
+        _selectedPath = files[0].Path.ToString();
         ProjectBox.Text = _selectedPath;
+
+        _fileUploadStream = await files[0].OpenReadAsync();
     }
 
     private void EnqueueProject()
     {
-        if (_selectedPath == null) return;
+        if (_selectedPath == null || _fileUploadStream == null) return;
 
         List<ApiArgType> arguments = new();
         arguments.Add(new ApiArgType("start_frame", this.StartFrameBox.Text.ToString()));
@@ -68,7 +73,7 @@ public partial class UploadView : UserControl
 
         arguments.Add(new ApiArgType("output_format", engineValue));
 
-        _taskListener.EnqueueTask(new Core.RenderAPI.Requests.ApiEnqueueRequest(this.EngineBox.SelectedIndex.ToString(), arguments), _selectedPath);
+        _taskListener.EnqueueTask(new Core.RenderAPI.Requests.ApiEnqueueRequest(this.EngineBox.SelectedIndex.ToString(), arguments), _fileUploadStream, _selectedPath);
 
         _uIInfluencer.ReturnFromUploadDialog();
     }

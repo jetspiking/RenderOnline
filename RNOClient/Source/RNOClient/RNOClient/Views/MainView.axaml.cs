@@ -29,8 +29,8 @@ namespace RNOClient.Views
 {
     public partial class MainView : UserControl, ITaskListener, IUIInfluencer
     {
-        private String _ipAddress = "127.0.0.1";    // IP-address or domain.
-        private String? _port = null;               // Port here. If using domain, set to null.
+        private String _ipAddress = "127.0.0.1";
+        private String? _port = null;
 
         public MainView()
         {
@@ -111,9 +111,9 @@ namespace RNOClient.Views
                     }
 
 #if DEBUG
-                    Label responseBlock = new()
+                    TextBlock responseBlock = new()
                     {
-                        Content = statusResponse
+                        Text = statusResponse.Content.ToString()
                     };
                     this.Content = responseBlock;
 #endif
@@ -125,9 +125,9 @@ namespace RNOClient.Views
                 ButtonResult result = await box.ShowAsync();
 
 #if DEBUG
-                Label responseBlock = new()
+                TextBlock responseBlock = new()
                 {
-                    Content = e.Message
+                    Text = e.Message + "\n" + e.StackTrace + "\n" + e.InnerException
                 };
                 this.Content = responseBlock;
 #endif
@@ -163,9 +163,9 @@ namespace RNOClient.Views
                     ButtonResult result = await box.ShowAsync();
 
 #if DEBUG
-                    Label responseBlock = new()
+                    TextBlock responseBlock = new()
                     {
-                        Content = statusResponse
+                        Text = statusResponse.Content.ToString()
                     };
                     this.Content = responseBlock;
 #endif
@@ -174,9 +174,9 @@ namespace RNOClient.Views
             catch (HttpRequestException e)
             {
 #if DEBUG
-                Label responseBlock = new()
+                TextBlock responseBlock = new()
                 {
-                    Content = e.Message
+                    Text = e.Message + "\n" + e.StackTrace + "\n" + e.InnerException
                 };
                 this.Content = responseBlock;
 #endif
@@ -215,9 +215,9 @@ namespace RNOClient.Views
                     ButtonResult result = await box.ShowAsync();
 
 #if DEBUG
-                    Label responseBlock = new()
+                    TextBlock responseBlock = new()
                     {
-                        Content = statusResponse.ToString()
+                        Text = statusResponse.Content.ToString()
                     };
                     this.Content = responseBlock;
 #endif
@@ -226,16 +226,16 @@ namespace RNOClient.Views
             catch (HttpRequestException e)
             {
 #if DEBUG
-                Label responseBlock = new()
+                TextBlock responseBlock = new()
                 {
-                    Content = e.Message
+                    Text = e.Message + "\n" + e.StackTrace + "\n" + e.InnerException
                 };
                 this.Content = responseBlock;
 #endif
             }
         }
 
-        private async Task RenderAPIEnqueueRequest(ApiEnqueueRequest task, String filePath)
+        private async Task RenderAPIEnqueueRequest(ApiEnqueueRequest task, Stream stream, String fileName)
         {
             HttpClient httpClient = new();
             httpClient.DefaultRequestHeaders.Add("email", this.EmailBox.Text);
@@ -243,7 +243,6 @@ namespace RNOClient.Views
             httpClient.BaseAddress = new Uri($"https://{_ipAddress}:{_port}");
 
             MultipartFormDataContent content = new MultipartFormDataContent();
-            FileStream? fileStream = null;
             StreamContent? fileContent = null;
 
             try
@@ -261,15 +260,14 @@ namespace RNOClient.Views
                 content.Add(jsonContent);
 
                 // Add the file content
-                fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-                fileContent = new StreamContent(fileStream);
+                fileContent = new StreamContent(stream);
                 fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
                 // Add content-disposition header manually for the file part
                 fileContent.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
                 {
                     Name = "\"file\"",
-                    FileName = $"\"{Path.GetFileName(filePath)}\""
+                    FileName = fileName
                 };
 
                 content.Add(fileContent);
@@ -282,15 +280,15 @@ namespace RNOClient.Views
 
                 if (statusResponse.IsSuccessStatusCode)
                 {
-                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Info", $"Enqueued \"{Path.GetFileName(filePath)}\".", ButtonEnum.Ok, Icon.Success, WindowStartupLocation.CenterOwner);
+                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Info", $"Enqueued \"{fileName}\".", ButtonEnum.Ok, Icon.Success, WindowStartupLocation.CenterOwner);
                     ButtonResult result = await box.ShowAsync();
                 }
                 else
                 {
 #if DEBUG
-                    Label responseBlock = new()
+                    TextBlock responseBlock = new()
                     {
-                        Content = $"Status: {statusResponse.StatusCode}\nReason: {statusResponse.ReasonPhrase}\nContent: {responseBody}"
+                        Text = $"Status: {statusResponse.StatusCode}\nReason: {statusResponse.ReasonPhrase}\nContent: {responseBody}"
                     };
                     this.Content = responseBlock;
 #endif
@@ -302,9 +300,9 @@ namespace RNOClient.Views
             catch (Exception e)
             {
 #if DEBUG
-                Label responseBlock = new()
+                TextBlock responseBlock = new()
                 {
-                    Content = e.Message
+                    Text = e.Message + "\n" + e.StackTrace + "\n" + e.InnerException
                 };
                 this.Content = responseBlock;
 #endif
@@ -357,9 +355,9 @@ namespace RNOClient.Views
             await RenderAPIDownloadRequest(task);
         }
 
-        public async void EnqueueTask(ApiEnqueueRequest task, String filePath)
+        public async void EnqueueTask(ApiEnqueueRequest task, Stream fileUploadStream, String fileName)
         {
-            await RenderAPIEnqueueRequest(task, filePath);
+            await RenderAPIEnqueueRequest(task, fileUploadStream, fileName);
             RenderAPIInfoRequest();
         }
 

@@ -14,6 +14,6 @@ namespace RNOClient.Core.Listeners
         public void DeleteTask(ApiTaskInfo task);
         public void DetailsTask(ApiTaskInfo task);
         public void DownloadTask(ApiTaskInfo task);
-        public void EnqueueTask(ApiEnqueueRequest arguments, String filePath);
+        public void EnqueueTask(ApiEnqueueRequest arguments, Stream fileUploadStream, String fileName);
     }
 }
