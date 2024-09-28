@@ -3,33 +3,62 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="450"
-             x:Class="RNOClient.Views.TaskView" FontFamily="Consolas">
-	<DockPanel HorizontalAlignment="Stretch" Height="75">
-		<StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
-			<!--check.png, clock.png, error.png-->
-			<Image Name="StatusCheckImage" Source="/Assets/check.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
-			<Image Name="StatusErrorImage" Source="/Assets/error.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
-			<Image Name="StatusBusyImage" Source="/Assets/clock.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
+             x:Class="RNOClient.Views.TaskView" FontFamily="Consolas" Margin="10,0,10,0">
 
-			<Border Name="DownloadButtonBorder"  Width="40" Height="40" Margin="20,0,20,0" HorizontalAlignment="Center" VerticalAlignment="Center">
-			<Image Name="DownloadButton" Source="/Assets/download.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,1,1,1"/>
-			</Border>
+	<ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+		<DockPanel HorizontalAlignment="Stretch" Height="75">
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
 
-			<Label Name="FileName" Content="Name" Width="350" FontWeight="Bold" VerticalAlignment="Center"/>
-			
-			<Label Name="FileSize" Content="Size" Width="150" FontWeight="Bold" VerticalAlignment="Center" IsVisible="False"/>
+				<Grid Width="50" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<Image Name="StatusCheckImage" Source="/Assets/check.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
+					<Image Name="StatusErrorImage" Source="/Assets/error.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
+					<Image Name="StatusBusyImage" Source="/Assets/clock.png" Width="40" HorizontalAlignment="Stretch" VerticalAlignment="Center" Margin="0,0,5,0"/>
+				</Grid>
 
-			<Label Name="Engine" Content="Engine" Width="100" FontWeight="Bold" VerticalAlignment="Center"/>
+				<Grid Width="70" HorizontalAlignment="Left" Margin="0,0,15,0">
+					<Border Name="DownloadButtonBorder" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Center">
+						<Image Name="DownloadButton" Source="/Assets/download.png" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="1,1,1,1"/>
+					</Border>
+				</Grid>
 
-			<Label Name="QueueTime" Content="Queue" Width="175" FontWeight="Bold" VerticalAlignment="Center"/>
+				<Grid Width="500" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<TextBlock Name="FileName" Text="Name" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"/>
+				</Grid>
 
-			<Label Name="StartTime" Content="Start" Width="175" FontWeight="Bold" VerticalAlignment="Center"/>
-			
-			<Label Name="StopTime" Content="Stop" Width="175" FontWeight="Bold" VerticalAlignment="Center"/>
+				<Grid Width="100" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<TextBlock Name="FileSize" Text="Size" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"/>
+				</Grid>
 
-			<Border Name="TrashButtonBorder" Width="40" Height="40" Margin="0,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" >
-			<Image Name="TrashButton" Source="/Assets/delete.png" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="1,1,1,1"/>
-			</Border>
-		</StackPanel>
-	</DockPanel>
+				<Grid Width="150" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<TextBlock Name="Engine" Text="Engine" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"/>
+				</Grid>
+
+				<Grid Width="250" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<TextBlock Name="QueueTime" Text="Queue" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"/>
+				</Grid>
+
+				<Grid Width="250" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<TextBlock Name="StartTime" Text="Start" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"/>
+				</Grid>
+
+				<Grid Width="250" HorizontalAlignment="Stretch" Margin="0,0,15,0">
+					<TextBlock Name="StopTime" Text="Stop" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Left"
+                               TextTrimming="CharacterEllipsis"/>
+				</Grid>
+
+				<Grid Width="100" HorizontalAlignment="Left" Margin="0,0,0,0">
+					<Border Name="TrashButtonBorder" Width="40" Height="40" HorizontalAlignment="Left" VerticalAlignment="Center">
+						<Image Name="TrashButton" Source="/Assets/delete.png" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="1,1,1,1"/>
+					</Border>
+				</Grid>
+
+			</StackPanel>
+		</DockPanel>
+	</ScrollViewer>
+
 </UserControl>

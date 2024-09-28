@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using RNOClient.Core.Listeners;
 using RNOClient.Core.RenderAPI.Responses;
+using System;
 
 namespace RNOClient.Views;
 
@@ -68,12 +69,12 @@ public partial class TaskView : UserControl
             this.DownloadButton.Source = null;
         }
 
-        this.FileName.Content = taskInfo?.Render?.FileName;
-        this.FileSize.Content = taskInfo?.Render?.FileSize;
-        this.Engine.Content = taskInfo?.Engine?.Name;
-        this.QueueTime.Content = taskInfo?.Task.QueueTime.ToString();
-        this.StartTime.Content = taskInfo?.Task.StartTime.ToString();
-        this.StopTime.Content = taskInfo?.Task.EndTime.ToString();
+        this.FileName.Text = taskInfo?.Render?.FileName;
+        this.FileSize.Text = $"{Math.Ceiling((Double)(taskInfo?.Render?.FileSize ?? 0) / (1024.0 * 1024.0))} MB";
+        this.Engine.Text = taskInfo?.Engine?.Name;
+        this.QueueTime.Text = taskInfo?.Task.QueueTime.ToString();
+        this.StartTime.Text = taskInfo?.Task.StartTime.ToString();
+        this.StopTime.Text = taskInfo?.Task.EndTime.ToString();
 
         TrashButton.PointerPressed += (sender, e) =>
         {

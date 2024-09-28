@@ -32,6 +32,7 @@ namespace RNOClient.Views
         private String _ipAddress = "127.0.0.1";
         private String? _port = null;
 
+
         public MainView()
         {
             InitializeComponent();
@@ -54,6 +55,12 @@ namespace RNOClient.Views
                 this.UploadViewer.Content = new UploadView(this as ITaskListener, this as IUIInfluencer);
                 TasksViewer.IsVisible = false;
                 UploadViewer.IsVisible = true;
+            };
+
+            this.TokenBox.KeyDown += (sender, e) =>
+            {
+                if (e.Key == Avalonia.Input.Key.Enter)
+                    RenderAPIInfoRequest();
             };
             
         }
@@ -79,12 +86,11 @@ namespace RNOClient.Views
             {
                 HttpResponseMessage statusResponse = await httpClient.GetAsync("/renderapi/v1/info");
 
+                String responseBody = await statusResponse.Content.ReadAsStringAsync();
+                ApiInfoResponse? apiInfoResponse = JsonConvert.DeserializeObject<ApiInfoResponse>(responseBody);
+
                 if (statusResponse.IsSuccessStatusCode)
                 {
-
-                    String responseBody = await statusResponse.Content.ReadAsStringAsync();
-                    ApiInfoResponse? apiInfoResponse = JsonConvert.DeserializeObject<ApiInfoResponse>(responseBody);
-
                     if (apiInfoResponse == null) return;
 
                     this.TitleLabel.Content = $"{apiInfoResponse.User.FirstName} {apiInfoResponse.User.LastName}";
@@ -146,15 +152,17 @@ namespace RNOClient.Views
             {
                 HttpResponseMessage statusResponse = await httpClient.PostAsJsonAsync("/renderapi/v1/delete", new ApiDeleteRequest(apiTaskInfo.Task.TaskId));
 
+                String responseBody = await statusResponse.Content.ReadAsStringAsync();
+                ApiDeleteResponse? apiDeleteResponse = JsonConvert.DeserializeObject<ApiDeleteResponse>(responseBody);
+
                 if (statusResponse.IsSuccessStatusCode)
                 {
-
-                    String responseBody = await statusResponse.Content.ReadAsStringAsync();
-                    ApiDeleteResponse? apiDeleteResponse = JsonConvert.DeserializeObject<ApiDeleteResponse>(responseBody);
-
-                    if (apiDeleteResponse == null) return;
-
                     IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard($"Info", $"Deleted \"{apiTaskInfo.Render?.FileName}\".", ButtonEnum.Ok, Icon.Success, WindowStartupLocation.CenterOwner);
+                    ButtonResult result = await box.ShowAsync();
+                }
+                else if (apiDeleteResponse != null)
+                {
+                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Error", apiDeleteResponse.ErrorMessage, ButtonEnum.Ok, Icon.Forbidden, WindowStartupLocation.CenterOwner);
                     ButtonResult result = await box.ShowAsync();
                 }
                 else
@@ -205,7 +213,7 @@ namespace RNOClient.Views
                     Byte[] fileData = await statusResponse.Content.ReadAsByteArrayAsync();
 
                     ContentDispositionHeaderValue contentDisposition = statusResponse.Content.Headers.ContentDisposition;
-                    string fileName = contentDisposition != null ? contentDisposition.FileName.Trim('"') : "download.zip";
+                    String fileName = contentDisposition != null ? contentDisposition.FileName.Trim('"') : "download.zip";
 
                     await SaveFileUsingStorageProvider(fileData, fileName);
                 }
@@ -281,6 +289,11 @@ namespace RNOClient.Views
                 if (statusResponse.IsSuccessStatusCode)
                 {
                     IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Info", $"Enqueued \"{fileName}\".", ButtonEnum.Ok, Icon.Success, WindowStartupLocation.CenterOwner);
+                    ButtonResult result = await box.ShowAsync();
+                }
+                else if (apiEnqueueResponse != null)
+                {
+                    IMsBox<ButtonResult> box = MessageBoxManager.GetMessageBoxStandard("Error", apiEnqueueResponse.ErrorMessage, ButtonEnum.Ok, Icon.Forbidden, WindowStartupLocation.CenterOwner);
                     ButtonResult result = await box.ShowAsync();
                 }
                 else

@@ -9,6 +9,7 @@
 			 VerticalAlignment="Stretch"
 			 FontFamily="Consolas"
 			 Foreground="#888821"
+			 
              >
 
 	<DockPanel Name="RootPanel" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="10,10,10,10">

@@ -13,4 +13,7 @@
 		VerticalAlignment="Stretch"
 		SizeToContent="Height">
         <views:MainView />
+	<Design.DataContext>
+		<vm:TaskDataViewModel/>
+	</Design.DataContext>
 </Window>
