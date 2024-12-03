@@ -12,9 +12,6 @@ Solution for Managing and Executing Rendering Tasks on HPC Infrastructure.
 
 # Todo:
 
-## RenderOnline
-- Website containing information about the service and pricing for service
-
 ## AdminPortal
 - Management portal
 
