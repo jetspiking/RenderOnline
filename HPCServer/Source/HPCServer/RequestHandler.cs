@@ -13,33 +13,17 @@ namespace HPCServer
 {
     public class RequestHandler
     {
-        private Core.Configuration.HPCServer _hpcServerArgs;
+        private Core.Configuration.HPCServer _hpcServerConfiguration;
         
         private Process? _renderProcess = null;
         private UInt64 _taskId { get; set; } = 0;
         private Boolean _isLastSuccessfull { get; set; } = true;
         private DateTime? _taskExitTime = null;
 
-        public RequestHandler(WebApplication app)
+        public RequestHandler(WebApplication app, Core.Configuration.HPCServer configuration)
         {
-            const String configurationFileName = "HPCServer.json";
-            String configurationFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, configurationFileName);
+            this._hpcServerConfiguration = configuration;
 
-            Console.WriteLine("Searching for configuration file: "+configurationFilePath);
-
-            Core.Configuration.HPCServer? configuration = JsonManager.DeserializeFromFile<Core.Configuration.HPCServer>(configurationFilePath);
-
-            if (configuration == null)
-            {
-                Console.WriteLine($"{configurationFileName} not found!");
-                Console.ReadKey();
-                Environment.Exit(0);
-            }
-
-            this._hpcServerArgs = configuration;
-
-            app.Urls.Add("https://localhost:"+ _hpcServerArgs.Port);
-            app.UseHttpsRedirection();
             app.UseAuthorization();
 
             // Get machine status.
@@ -70,8 +54,8 @@ namespace HPCServer
 
             List<String> engineIds = new();
 
-            if (_hpcServerArgs.RenderingEngines != null)
-                foreach (HPCEngine engine in _hpcServerArgs.RenderingEngines)
+            if (_hpcServerConfiguration.RenderingEngines != null)
+                foreach (HPCEngine engine in _hpcServerConfiguration.RenderingEngines)
                     engineIds.Add(engine.EngineId);
 
             HPCStatusRequestResponse statusResponse = new(engineIds.ToArray(), renderTask);
@@ -82,7 +66,7 @@ namespace HPCServer
 
         public async Task HandleStartRenderRequest(HttpContext httpContext)
         {
-            if (_hpcServerArgs == null) return;
+            if (_hpcServerConfiguration == null) return;
 
             if (this._taskExitTime == null && this._renderProcess != null)
             {
@@ -91,7 +75,7 @@ namespace HPCServer
                 return;
             }
 
-            HPCStart hpcRender = new(_hpcServerArgs);
+            HPCStart hpcRender = new(_hpcServerConfiguration);
 
             HPCStartArgs? arguments = await httpContext.Request.ReadFromJsonAsync<HPCStartArgs>();
             if (arguments == null)
