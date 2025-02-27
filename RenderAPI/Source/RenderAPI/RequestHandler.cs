@@ -1209,7 +1209,7 @@ namespace RenderAPI
                             foreach (DbMachine machine in machines)
                             {
                                 HttpClient httpClient = new HttpClient(this._httpClientHandler);
-                                httpClient.BaseAddress = new Uri($"https://{machine.IpAddress}:{machine.Port}");
+                                httpClient.BaseAddress = new Uri($"http://{machine.IpAddress}:{machine.Port}");
                                 HttpResponseMessage statusResponse = await httpClient.GetAsync("/hpc/status");
 
                                 if (statusResponse.IsSuccessStatusCode)
@@ -1258,7 +1258,7 @@ namespace RenderAPI
                 String startMessage = JsonConvert.SerializeObject(startArgs);
 
                 HttpClient httpClient = new HttpClient(this._httpClientHandler);
-                httpClient.BaseAddress = new Uri($"https://{machine.IpAddress}:{machine.Port}");
+                httpClient.BaseAddress = new Uri($"http://{machine.IpAddress}:{machine.Port}");
                 HttpContent content = new StringContent(startMessage, Encoding.UTF8, "application/json");
                 HttpResponseMessage startResponse = await httpClient.PostAsync("/hpc/start", content);
 
@@ -1300,7 +1300,7 @@ namespace RenderAPI
                 String stopMessage = JsonConvert.SerializeObject(stopArgs);
 
                 HttpClient httpClient = new HttpClient(this._httpClientHandler);
-                httpClient.BaseAddress = new Uri($"https://{machine.IpAddress}:{machine.Port}");
+                httpClient.BaseAddress = new Uri($"http://{machine.IpAddress}:{machine.Port}");
                 HttpContent content = new StringContent(stopMessage, Encoding.UTF8, "application/json");
                 HttpResponseMessage stopResponse = await httpClient.PostAsync("/hpc/stop", content);
 
