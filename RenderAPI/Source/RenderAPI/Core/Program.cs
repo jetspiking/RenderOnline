@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using RenderAPI.Misc;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.Http.Features;
 
 namespace RenderAPI.Core
 {
@@ -41,6 +42,11 @@ namespace RenderAPI.Core
                     });
             });
 
+            builder.Services.Configure<FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = Int64.MaxValue;
+            });
+            
             if (configuration.Certificate != null)
             {
                 Console.WriteLine("☑ SSL-certificate paths provided. Using HTTPS...");
@@ -59,6 +65,7 @@ namespace RenderAPI.Core
                     {
                         listenOptions.UseHttps(X509Certificate2.CreateFromPem(File.ReadAllText(configuration.Certificate.FullchainPemPath), File.ReadAllText(configuration.Certificate.PrivPemPath)));
                     });
+                    options.Limits.MaxRequestBodySize = null;
                 });
             }
             else
@@ -67,6 +74,7 @@ namespace RenderAPI.Core
                 builder.WebHost.ConfigureKestrel(options =>
                 {
                     options.ListenLocalhost(int.Parse(configuration.Port));
+                    options.Limits.MaxRequestBodySize = null;
                 });
             }
 

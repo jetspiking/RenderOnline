@@ -23,6 +23,7 @@ using RenderAPI.HPCServer;
 using Mysqlx.Session;
 using Org.BouncyCastle.Crypto.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 
 namespace RenderAPI
 {
@@ -385,7 +386,16 @@ namespace RenderAPI
                         DateTime queueTime = DateTime.Now;
                         String directory = Path.Combine(engine.DownloadPath, user.UserId.ToString(), queueTime.Ticks.ToString());
                         if (!Directory.Exists(directory))
+                        {
                             Directory.CreateDirectory(directory);
+
+                            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                            {
+                                File.SetUnixFileMode(directory, UnixFileMode.UserRead|UnixFileMode.UserWrite|UnixFileMode.UserExecute|
+                                                                UnixFileMode.GroupRead|UnixFileMode.GroupWrite|UnixFileMode.GroupExecute|
+                                                                UnixFileMode.OtherRead|UnixFileMode.OtherWrite|UnixFileMode.OtherExecute);
+                            }
+                        }
 
                         String filePath = Path.Combine(directory, uploadedFile.FileName);
 
@@ -1396,7 +1406,7 @@ namespace RenderAPI
                                 reader.Close();
 
                                 HttpClient httpClient = new HttpClient(this._httpClientHandler);
-                                httpClient.BaseAddress = new Uri($"https://{ipAddress}:{port}");
+                                httpClient.BaseAddress = new Uri($"http://{ipAddress}:{port}");
                                 HttpResponseMessage statusResponse = await httpClient.GetAsync("/hpc/status");
 
                                 if (statusResponse.IsSuccessStatusCode)
