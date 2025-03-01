@@ -93,9 +93,14 @@ namespace HPCServer
 
             // Depending on whether the result does not exists, something went wrong in starting the rendering assignment.
             if (toRender != null)
+            {
                 AssignWhenRenderFinished(toRender);
+            }
             else
+            {
                 await CreateRenderResponseObject(httpContext, StatusCodes.Status400BadRequest, hpcRender.ErrorMessage, false);
+                return;
+            }
 
             await CreateRenderResponseObject(httpContext, StatusCodes.Status200OK, hpcRender.SuccessMessage, true);
         }
